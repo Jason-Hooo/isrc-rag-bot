@@ -1,0 +1,10 @@
+streamlit
+llama-index-core
+llama-index-embeddings-huggingface
+llama-index-llms-gemini
+llama-index-vector-stores-chroma
+llama-index-readers-file
+chromadb
+python-dotenv
+pypdf
+python-docx
