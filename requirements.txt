@@ -8,3 +8,5 @@ chromadb
 python-dotenv
 pypdf
 python-docx
+gspread
+google-auth-oauthlib

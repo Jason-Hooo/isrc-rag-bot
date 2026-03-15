@@ -58,7 +58,7 @@ def _init_settings() -> None:
     """初始化 LlamaIndex 全域 Embedding 與 LLM 設定"""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise RuntimeError("API_KEY 勒")
+        raise RuntimeError("漏了 GEMINI_API_KEY")
 
     Settings.text_splitter = SentenceSplitter(
         chunk_size=_CHUNK_SIZE,
@@ -67,6 +67,7 @@ def _init_settings() -> None:
 
     Settings.embed_model = HuggingFaceEmbedding(
         model_name=_EMBED_MODEL,
+        token=os.getenv("HF_TOKEN"),
         trust_remote_code=True,
     )
     Settings.llm = Gemini(

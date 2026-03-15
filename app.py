@@ -2,6 +2,7 @@
 import streamlit as st
 
 from src.rag import build_query_engine, query
+from src.sheets_logger import log_to_sheet
 
 
 st.set_page_config(page_title="原資智慧服務 AI 機器人")
@@ -36,6 +37,7 @@ if st.button("送出問題"):
     else:
         with st.spinner("小幫手正在思考中…"):
             answer, sources = query(engine, question)
+            log_to_sheet(question, answer, sources)
         st.subheader("回應內容")
         st.write(answer)
 
