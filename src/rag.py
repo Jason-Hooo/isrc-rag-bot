@@ -58,7 +58,7 @@ def _init_settings() -> None:
     """初始化 LlamaIndex 全域 Embedding 與 LLM 設定"""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise RuntimeError("漏了 GEMINI_API_KEY")
+        raise RuntimeError("記得去 .env 填寫 GEMINI_API_KEY")
 
     Settings.text_splitter = SentenceSplitter(
         chunk_size=_CHUNK_SIZE,

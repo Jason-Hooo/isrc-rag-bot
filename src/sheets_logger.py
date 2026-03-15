@@ -22,7 +22,7 @@ def _get_gspread_client() -> gspread.Client | None:
     如果缺少 credential 或工作表名稱，則回傳 None
     """
     if not _GOOGLE_CREDENTIALS_JSON or not _SHEET_NAME:
-        print("漏了 GOOGLE_CREDENTIALS_JSON 或是 SHEET_NAME")
+        print("記得去 .env 填寫 GOOGLE_CREDENTIALS_JSON 或是 SHEET_NAME")
         return None
 
     try:
