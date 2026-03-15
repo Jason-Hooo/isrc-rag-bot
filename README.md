@@ -17,7 +17,7 @@
 .
 ├── data/                  # 大家找的資料 (.txt, .pdf, .docx)
 ├── models/
-│   └── chroma_db/         # ChromaDB 向量資料庫
+│   └── chroma_db/         # ChromaDB 向量資料庫（.gitignore 忽略）
 ├── src/
 │   ├── rag.py             # RAG 核心邏輯 (讀取、索引、查詢)
 │   └── sheets_logger.py   # Google Sheets 紀錄問答模組
