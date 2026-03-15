@@ -47,7 +47,8 @@ def log_to_sheet(question: str, answer: str, sources: list[str]) -> None:
         spreadsheet = client.open(_SHEET_NAME)
         worksheet = spreadsheet.sheet1
 
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        tz_taipei = datetime.timezone(datetime.timedelta(hours=8))
+        timestamp = datetime.datetime.now(tz=tz_taipei).strftime("%Y-%m-%d %H:%M:%S")
         sources_str = "\n\n---\n\n".join(sources)
         
         new_row = [timestamp, question, answer, sources_str]
