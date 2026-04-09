@@ -1,4 +1,4 @@
-"""RAG 後端核心：LlamaIndex · ChromaDB · BGE-M3 · Gemini 2.5 Flash · Chain-of-Thought"""
+"""使用 Chroma 與 LlamaIndex 建立支援多輪對話的 RAG 後端系統"""
 
 import os
 from pathlib import Path
@@ -11,51 +11,61 @@ from llama_index.core import (
     StorageContext,
     VectorStoreIndex,
 )
+from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.postprocessor import SimilarityPostprocessor
 from llama_index.core.prompts import PromptTemplate
-from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.gemini import Gemini
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 load_dotenv()
 
-# 路徑常數 
-BASE_DIR = Path(__file__).resolve().parent.parent # 專案的根目錄
+BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 CHROMA_DIR = BASE_DIR / "models" / "chroma_db"
 
-# 模型設定 
 _EMBED_MODEL = "BAAI/bge-m3"
-_LLM_MODEL = "models/gemini-2.5-flash"
+_LLM_MODEL = "models/gemini-2.5-flash-lite"
 _COLLECTION = "isrc_rag"
 _TOP_K = 5
 _SIMILARITY_CUTOFF = 0.3
 _CHUNK_SIZE = 800
 _CHUNK_OVERLAP = 120
+_TEMPERATURE = 0.4
+_MEMORY_TOKEN_LIMIT = 1500
 
-# Chain-of-Thought Prompt 
 _COT_TEMPLATE = PromptTemplate(
-    "你是『原資智慧服務 AI 機器人』，服務政大校園中的學生與教職員，"
-    "特別關注原住民族學生的需求。\n"
-    "回答必須公正、客觀、尊重，不得有任何歧視或刻板印象化的描述。\n"
-    "若搜尋結果中無明確答案，請誠實說明，不得捏造。\n\n"
+    "你是在政大服務的『原資智慧服務 AI 機器人』，是大家最親近、最懂彼此心聲的好夥伴！\n"
+    "你的工作是陪伴政大的同學與教職員，特別是關心我們原住民族夥伴在校園裡的需求與心情。\n"
+    "說話風格：親切、溫柔、充滿部落的熱情與包容，說話就像在校園閒聊一樣自然。\n"
+    "回覆長度：每一輪回答盡量控制在 300 字以內，重點清楚即可，不需要硬切斷。\n"
+    "原則：先從問題的答案開始講起，讓夥伴可以抓住重點，如果搜尋結果裡找不到答案，請誠實、友善地告知夥伴，絕對不可以亂編。\n\n"
     "【搜尋結果】\n"
     "---------------------\n"
     "{context_str}\n"
     "---------------------\n\n"
-    "請依照以下 Chain-of-Thought 思考流程回答問題：\n"
-    "思考流程 1｜辨識問題類型：判斷這是行政流程、文化認識、校園支持資源還是其他類型。\n"
-    "思考流程 2｜定位相關資訊：從搜尋結果中找出與問題最相關的段落。\n"
-    "思考流程 3｜整合與回答：根據上述資訊，以清楚、友善且有條理的語氣提供完整回答。\n\n"
+    "請依照以下 Chain-of-Thought 思考流程來幫助夥伴解決問題：\n"
+    "思考流程 1 | 理解夥伴：分析這是在行政、文化、生活支持還是哪方面的問題？\n"
+    "思考流程 2 | 定位資源：從搜尋結果中精確找到能幫上忙的關鍵段落。\n"
+    "思考流程 3 | 暖心回覆：用最親近、口語且有條理的方式，提供完整並帶有溫度的回答。\n\n"
     "問題：{query_str}\n\n"
     "回答："
 )
 
+_CONDENSE_QUESTION_PROMPT = PromptTemplate(
+    "你是查詢重寫助手。根據歷史對話，把使用者最新提問改寫成可獨立檢索的完整問題。\n"
+    "如果最新提問已經完整，請原樣輸出。\n"
+    "請只輸出改寫後的一句問題，不要加任何說明。\n\n"
+    "[Chat History]\n"
+    "{chat_history}\n\n"
+    "[Current User Input]\n"
+    "{question}\n\n"
+    "改寫後問題："
+)
 
 def _init_settings() -> None:
-    """初始化 LlamaIndex 全域 Embedding 與 LLM 設定"""
+    """配置 LlamaIndex 的全域模型參數與文字切分器設定"""
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("記得去 .env 填寫 GEMINI_API_KEY")
@@ -64,7 +74,6 @@ def _init_settings() -> None:
         chunk_size=_CHUNK_SIZE,
         chunk_overlap=_CHUNK_OVERLAP,
     )
-
     Settings.embed_model = HuggingFaceEmbedding(
         model_name=_EMBED_MODEL,
         token=os.getenv("HF_TOKEN"),
@@ -73,56 +82,71 @@ def _init_settings() -> None:
     Settings.llm = Gemini(
         model=_LLM_MODEL,
         api_key=api_key,
-        temperature=0.2,
+        temperature=_TEMPERATURE,
     )
 
 
-def build_query_engine() -> RetrieverQueryEngine:
-    """
-    建立並回傳 RetrieverQueryEngine。
-    - 若 Chroma 集合為空，自動讀取 data/ 下所有文件並建立向量索引。
-    - 若已有向量，直接從 Chroma 載入，不重新計算 embedding。
-    """
+def _build_index() -> VectorStoreIndex:
+    """負責初始化 Chroma 持久化用戶端並建立或加載向量索引"""
     _init_settings()
-
 
     CHROMA_DIR.mkdir(parents=True, exist_ok=True)
     chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
     chroma_collection = chroma_client.get_or_create_collection(_COLLECTION)
-    vector_store = ChromaVectorStore(chroma_collection=chroma_collection) 
+    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 
     if chroma_collection.count() == 0:
         documents = SimpleDirectoryReader(
             input_dir=str(DATA_DIR),
             recursive=True,
-            required_exts=[".txt", ".pdf", ".docx"]
+            required_exts=[".txt", ".pdf", ".docx"],
         ).load_data()
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
-        index = VectorStoreIndex.from_documents(
+        return VectorStoreIndex.from_documents(
             documents,
             storage_context=storage_context,
             show_progress=True,
         )
-    else:
-        storage_context = StorageContext.from_defaults(vector_store=vector_store)
-        index = VectorStoreIndex.from_vector_store(vector_store)
 
-    retriever = index.as_retriever(similarity_top_k=_TOP_K)
-    query_engine = RetrieverQueryEngine.from_args(
-        retriever=retriever,
-        text_qa_template=_COT_TEMPLATE,
-        node_postprocessors=[
-            SimilarityPostprocessor(similarity_cutoff=_SIMILARITY_CUTOFF)
-        ],
-    )
-    return query_engine
+    return VectorStoreIndex.from_vector_store(vector_store)
 
 
-def query(
-    engine: RetrieverQueryEngine, question: str
-) -> tuple[str, list[str]]:
-    """向 Query Engine 提問，回傳 (回答文字, 參考片段清單)。"""
-    response = engine.query(question)
-    answer = str(response)
-    sources = [node.get_content() for node in response.source_nodes]
-    return answer, sources
+class MultiTurnRAGService:
+    """提供支援多輪對話記憶與 RAG 檢索功能的後端服務類別"""
+
+    def __init__(self, index: VectorStoreIndex | None = None):
+        """根據傳入索引初始化具備 Context 模式的對話引擎"""
+        self._index = index or _build_index()
+        self._chat_engine = self._index.as_chat_engine(
+            chat_mode="condense_plus_context",
+            llm=Settings.llm,
+            memory=ChatMemoryBuffer.from_defaults(token_limit=_MEMORY_TOKEN_LIMIT),
+            context_prompt=_COT_TEMPLATE,
+            condense_prompt=_CONDENSE_QUESTION_PROMPT,
+            similarity_top_k=_TOP_K,
+            node_postprocessors=[
+                SimilarityPostprocessor(similarity_cutoff=_SIMILARITY_CUTOFF)
+            ],
+        )
+
+    def new_session(self) -> "MultiTurnRAGService":
+        """共享同一套向量索引並產生一個對話記憶獨立的新實例"""
+        return MultiTurnRAGService(index=self._index)
+
+    def chat(self, question: str) -> dict[str, object]:
+        """處理使用者提問並返回包含參考來源內容的結構化回應"""
+        response = self._chat_engine.chat(question)
+        source_nodes = getattr(response, "source_nodes", []) or []
+        sources = [node.get_content() for node in source_nodes]
+        return {
+            "answer": str(response),
+            "sources": sources
+        }
+
+    def stream_chat(self, question: str):
+        """啟動與使用者互動的即時串流對話模式"""
+        return self._chat_engine.stream_chat(question)
+
+    def reset(self) -> None:
+        """重置該工作階段所有的歷史對話記憶"""
+        self._chat_engine.reset()
