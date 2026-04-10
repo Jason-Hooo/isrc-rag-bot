@@ -1,9 +1,11 @@
 """streamlit 前端"""
 
+from uuid import uuid4
+
 import streamlit as st
 
 from src.rag import MultiTurnRAGService
-# from src.sheets_logger import log_to_sheet
+from src.sheets_logger import log_to_sheet
 
 
 st.set_page_config(page_title="原資智慧服務 AI 機器人")
@@ -30,6 +32,12 @@ service = load_service()
 if "chat_session" not in st.session_state: # 每個使用者獨有
     st.session_state.chat_session = service.new_session()
 
+if "conversation_id" not in st.session_state:
+    st.session_state.conversation_id = str(uuid4())
+
+if "turn_index" not in st.session_state:
+    st.session_state.turn_index = 0
+
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -41,6 +49,8 @@ if "messages" not in st.session_state:
 
 if st.button("重新開啟對話"):
     st.session_state.chat_session = service.new_session()
+    st.session_state.conversation_id = str(uuid4())
+    st.session_state.turn_index = 0
     st.session_state.messages = [
         {
             "role": "assistant",
@@ -76,18 +86,18 @@ if question:
 
     with st.chat_message("assistant"):
         with st.spinner("小幫手正在思考中…"):
-            try:
-                response = st.session_state.chat_session.stream_chat(question=question)
-                answer = st.write_stream(response.response_gen)
-                source_nodes = getattr(response, "source_nodes", []) or []
-                sources = _visible_sources([node.get_content() for node in source_nodes])
-            except IndexError:
-                # Gemini 串流偶發空 parts，降級為非串流避免整段對話中斷。
-                fallback = st.session_state.chat_session.chat(question=question)
-                answer = str(fallback.get("answer", ""))
-                sources = _visible_sources(fallback.get("sources", []))
-                st.write(answer)
-            # log_to_sheet(question, answer, sources)
+            response = st.session_state.chat_session.stream_chat(question=question)
+            answer = st.write_stream(response.response_gen)
+            source_nodes = getattr(response, "source_nodes", []) or []
+            sources = _visible_sources([node.get_content() for node in source_nodes])
+            st.session_state.turn_index += 1
+            log_to_sheet(
+                conversation_id=st.session_state.conversation_id,
+                turn_index=st.session_state.turn_index,
+                question=question,
+                answer=answer,
+                sources=sources,
+            )
 
         if sources:
             with st.expander("參考來源"):

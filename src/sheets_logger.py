@@ -1,4 +1,4 @@
-"""Google Sheets Logger: 把問答紀錄寫入 Google Sheet"""
+"""Google Sheets Logger: 把多輪對話紀錄寫入 Google Sheet"""
 
 import datetime
 import json
@@ -35,23 +35,34 @@ def _get_gspread_client() -> gspread.Client | None:
         return None
 
 
-def log_to_sheet(question: str, answer: str, sources: list[str]) -> None:
-    """
-    將單筆問答紀錄新增到 Google Sheet 
-    """
+def log_to_sheet(
+    conversation_id: str,
+    turn_index: int,
+    question: str,
+    answer: str,
+    sources: list[str],
+) -> None:
+    """將多輪對話中的單一輪問答寫入 Google Sheet。"""
     client = _get_gspread_client()
     if not client:
         return
 
     try:
         spreadsheet = client.open(_SHEET_NAME)
-        worksheet = spreadsheet.sheet1
+        worksheet = spreadsheet.worksheet("第二版 RAG")
 
         tz_taipei = datetime.timezone(datetime.timedelta(hours=8))
         timestamp = datetime.datetime.now(tz=tz_taipei).strftime("%Y-%m-%d %H:%M:%S")
         sources_str = "\n\n---\n\n".join(sources)
-        
-        new_row = [timestamp, question, answer, sources_str]
+
+        new_row = [
+            timestamp,
+            conversation_id,
+            turn_index,
+            question,
+            answer,
+            sources_str,
+        ]
         worksheet.append_row(new_row)
     except Exception as e:
         print(e)
