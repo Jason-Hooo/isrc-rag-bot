@@ -8,6 +8,12 @@ from src.rag import MultiTurnRAGService
 
 st.set_page_config(page_title="原資智慧服務 AI 機器人")
 
+_HIDDEN_SOURCE_PREFIX = "[系統提示]"
+
+
+def _visible_sources(sources: list[str]) -> list[str]:
+    return [src for src in sources if not src.startswith(_HIDDEN_SOURCE_PREFIX)]
+
 
 @st.cache_resource(show_spinner="正在載入中，請稍候…") # 全域共用
 def load_service():
@@ -47,7 +53,7 @@ if st.button("重新開啟對話"):
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
-        sources = message.get("sources") or []
+        sources = _visible_sources(message.get("sources") or [])
         if sources:
             with st.expander("參考資料來源"):
                 for i, src in enumerate(sources, start=1):
@@ -70,10 +76,17 @@ if question:
 
     with st.chat_message("assistant"):
         with st.spinner("小幫手正在思考中…"):
-            response = st.session_state.chat_session.stream_chat(question=question)
-            answer = st.write_stream(response.response_gen)
-            source_nodes = getattr(response, "source_nodes", []) or []
-            sources = [node.get_content() for node in source_nodes]
+            try:
+                response = st.session_state.chat_session.stream_chat(question=question)
+                answer = st.write_stream(response.response_gen)
+                source_nodes = getattr(response, "source_nodes", []) or []
+                sources = _visible_sources([node.get_content() for node in source_nodes])
+            except IndexError:
+                # Gemini 串流偶發空 parts，降級為非串流避免整段對話中斷。
+                fallback = st.session_state.chat_session.chat(question=question)
+                answer = str(fallback.get("answer", ""))
+                sources = _visible_sources(fallback.get("sources", []))
+                st.write(answer)
             # log_to_sheet(question, answer, sources)
 
         if sources:

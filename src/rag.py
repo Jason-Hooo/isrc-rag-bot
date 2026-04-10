@@ -11,10 +11,14 @@ from llama_index.core import (
     StorageContext,
     VectorStoreIndex,
 )
+from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
 from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.postprocessor import SimilarityPostprocessor
 from llama_index.core.prompts import PromptTemplate
+from llama_index.core.retrievers import BaseRetriever, RouterRetriever
+from llama_index.core.tools import RetrieverTool
+from llama_index.core.chat_engine import CondensePlusContextChatEngine
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.gemini import Gemini
 from llama_index.vector_stores.chroma import ChromaVectorStore
@@ -40,15 +44,17 @@ _COT_TEMPLATE = PromptTemplate(
     "你的工作是陪伴政大的同學與教職員，特別是關心我們原住民族夥伴在校園裡的需求與心情。\n"
     "說話風格：親切、溫柔、充滿部落的熱情與包容，說話就像在校園閒聊一樣自然。\n"
     "回覆長度：每一輪回答盡量控制在 300 字以內，重點清楚即可，不需要硬切斷。\n"
-    "原則：先從問題的答案開始講起，讓夥伴可以抓住重點，如果搜尋結果裡找不到答案，請誠實、友善地告知夥伴，絕對不可以亂編。\n\n"
+    "原則：先從問題的答案開始講起，讓夥伴可以抓住重點；如果真的不知道或找不到答案，請誠實、友善地告知夥伴，絕對不可亂編。\n\n"
     "【搜尋結果】\n"
     "---------------------\n"
     "{context_str}\n"
     "---------------------\n\n"
-    "請依照以下 Chain-of-Thought 思考流程來幫助夥伴解決問題：\n"
-    "思考流程 1 | 理解夥伴：分析這是在行政、文化、生活支持還是哪方面的問題？\n"
-    "思考流程 2 | 定位資源：從搜尋結果中精確找到能幫上忙的關鍵段落。\n"
-    "思考流程 3 | 暖心回覆：用最親近、口語且有條理的方式，提供完整並帶有溫度的回答。\n\n"
+    "請依照以下思考指引來幫助夥伴解決問題：\n"
+    "1. 判斷情境：分析這是在行政、文化、生活支持還是日常寒暄？\n"
+    "2. 處理方式：\n"
+    "   - 若搜尋結果有提供相關資訊：請從中精確擷取關鍵段落，並轉化為口語回覆。\n"
+    "   - 若搜尋結果為空，或提示這是一般日常對話：請跳過資料檢索，直接以最親近、自然的語氣回應、給予陪伴或安慰。\n"
+    "3. 暖心輸出：確保回答完整且帶有溫度。\n\n"
     "問題：{query_str}\n\n"
     "回答："
 )
@@ -111,19 +117,48 @@ def _build_index() -> VectorStoreIndex:
     return VectorStoreIndex.from_vector_store(vector_store)
 
 
+class _FallbackRetriever(BaseRetriever):
+    """不需檢索時的空文件替代方案"""
+    def _retrieve(self, query_bundle: QueryBundle):
+        return [
+            NodeWithScore(
+                node=TextNode(
+                    text=(
+                        "[系統提示] 這是一般日常對話或寒暄，無需依賴知識庫檢索。"
+                        "請直接以『原資智慧服務 AI 機器人』的角色設定，用溫暖、親切的口語回應夥伴。"
+                    )
+                ),
+                score=1.0
+            )
+        ]
+    
+
 class MultiTurnRAGService:
     """提供支援多輪對話記憶與 RAG 檢索功能的後端服務類別"""
 
     def __init__(self, index: VectorStoreIndex | None = None):
-        """根據傳入索引初始化具備 Context 模式的對話引擎"""
+        """根據傳入索引初始化具備 Context 模式的路由對話引擎"""
         self._index = index or _build_index()
-        self._chat_engine = self._index.as_chat_engine(
-            chat_mode="condense_plus_context",
+        
+        vector_tool = RetrieverTool.from_defaults(
+            retriever=self._index.as_retriever(similarity_top_k=_TOP_K),
+            description="當夥伴詢問有關政大原資中心、獎助學金、宿舍、文化活動等具體資源與行政問題時，必須使用此工具。"
+        )
+        empty_tool = RetrieverTool.from_defaults(
+            retriever=_FallbackRetriever(),
+            description="當夥伴只是日常寒暄、打招呼、道謝，或無須查詢原資中心具體資料就能直接回答的對話，請使用此工具。"
+        )
+        router_retriever = RouterRetriever.from_defaults(
+            retriever_tools=[vector_tool, empty_tool],
+            llm=Settings.llm,
+        )
+
+        self._chat_engine = CondensePlusContextChatEngine.from_defaults(
+            retriever=router_retriever,
             llm=Settings.llm,
             memory=ChatMemoryBuffer.from_defaults(token_limit=_MEMORY_TOKEN_LIMIT),
             context_prompt=_COT_TEMPLATE,
             condense_prompt=_CONDENSE_QUESTION_PROMPT,
-            similarity_top_k=_TOP_K,
             node_postprocessors=[
                 SimilarityPostprocessor(similarity_cutoff=_SIMILARITY_CUTOFF)
             ],
