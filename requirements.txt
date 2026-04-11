@@ -4,9 +4,12 @@ llama-index-embeddings-huggingface
 llama-index-llms-gemini
 llama-index-vector-stores-chroma
 llama-index-readers-file
+llama-index-postprocessor-flag-embedding-reranker
 chromadb
 python-dotenv
 pypdf
 python-docx
 gspread
 google-auth-oauthlib
+git+https://github.com/FlagOpen/FlagEmbedding.git
+transformers<5

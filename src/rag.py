@@ -19,6 +19,7 @@ from llama_index.core.prompts import PromptTemplate
 from llama_index.core.retrievers import BaseRetriever, RouterRetriever
 from llama_index.core.tools import RetrieverTool
 from llama_index.core.chat_engine import CondensePlusContextChatEngine
+from llama_index.postprocessor.flag_embedding_reranker import FlagEmbeddingReranker
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.gemini import Gemini
 from llama_index.vector_stores.chroma import ChromaVectorStore
@@ -32,8 +33,10 @@ CHROMA_DIR = BASE_DIR / "models" / "chroma_db"
 _EMBED_MODEL = "BAAI/bge-m3"
 _LLM_MODEL = "models/gemini-2.5-flash-lite"
 _COLLECTION = "isrc_rag"
-_TOP_K = 5
+_TOP_K = 10
 _SIMILARITY_CUTOFF = 0.3
+_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
+_RERANK_TOP_N = 3
 _CHUNK_SIZE = 800
 _CHUNK_OVERLAP = 120
 _TEMPERATURE = 0.4
@@ -43,7 +46,7 @@ _COT_TEMPLATE = PromptTemplate(
     "你是在政大服務的『原資智慧服務 AI 機器人』，是大家最親近、最懂彼此心聲的好夥伴！\n"
     "你的工作是陪伴政大的同學與教職員，特別是關心我們原住民族夥伴在校園裡的需求與心情。\n"
     "說話風格：親切、溫柔、充滿部落的熱情與包容，說話就像在校園閒聊一樣自然。\n"
-    "回覆長度：每一輪回答盡量控制在 300 字以內，重點清楚即可，不需要硬切斷。\n"
+    "回覆長度：每一輪回答盡量控制在 100 字以內，重點清楚即可，不需要硬切斷。\n"
     "原則：先從問題的答案開始講起，讓夥伴可以抓住重點；如果真的不知道或找不到答案，請誠實、友善地告知夥伴，絕對不可亂編。\n\n"
     "【搜尋結果】\n"
     "---------------------\n"
@@ -131,6 +134,29 @@ class _FallbackRetriever(BaseRetriever):
                 score=1.0
             )
         ]
+
+
+class _ConditionalRerankerPostprocessor:
+    """當檢索結果僅有 fallback 系統提示時，跳過 reranker。"""
+
+    def __init__(self, inner_reranker: FlagEmbeddingReranker):
+        self._inner_reranker = inner_reranker
+
+    def postprocess_nodes(self, nodes, query_bundle=None):
+        if not nodes:
+            return nodes
+
+        is_fallback_only = True
+        for item in nodes:
+            content = item.node.get_content()
+            if not content.startswith("[系統提示]"):
+                is_fallback_only = False
+                break
+
+        if is_fallback_only:
+            return nodes
+
+        return self._inner_reranker.postprocess_nodes(nodes, query_bundle=query_bundle)
     
 
 class MultiTurnRAGService:
@@ -139,6 +165,12 @@ class MultiTurnRAGService:
     def __init__(self, index: VectorStoreIndex | None = None):
         """根據傳入索引初始化具備 Context 模式的路由對話引擎"""
         self._index = index or _build_index()
+        reranker = _ConditionalRerankerPostprocessor(
+            inner_reranker=FlagEmbeddingReranker(
+            model=_RERANKER_MODEL,
+            top_n=_RERANK_TOP_N,
+            )
+        )
         
         vector_tool = RetrieverTool.from_defaults(
             retriever=self._index.as_retriever(similarity_top_k=_TOP_K),
@@ -160,7 +192,8 @@ class MultiTurnRAGService:
             context_prompt=_COT_TEMPLATE,
             condense_prompt=_CONDENSE_QUESTION_PROMPT,
             node_postprocessors=[
-                SimilarityPostprocessor(similarity_cutoff=_SIMILARITY_CUTOFF)
+                SimilarityPostprocessor(similarity_cutoff=_SIMILARITY_CUTOFF),
+                reranker,
             ],
         )
 
