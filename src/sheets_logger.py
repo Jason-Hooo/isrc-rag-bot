@@ -49,7 +49,7 @@ def log_to_sheet(
 
     try:
         spreadsheet = client.open(_SHEET_NAME)
-        worksheet = spreadsheet.worksheet("第二版 RAG")
+        worksheet = spreadsheet.worksheet("第三版 RAG")
 
         tz_taipei = datetime.timezone(datetime.timedelta(hours=8))
         timestamp = datetime.datetime.now(tz=tz_taipei).strftime("%Y-%m-%d %H:%M:%S")
