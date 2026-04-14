@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 
 import chromadb
-import requests
 from dotenv import load_dotenv
 from llama_index.core import (
     Settings,
@@ -20,8 +19,9 @@ from llama_index.core.prompts import PromptTemplate
 from llama_index.core.retrievers import BaseRetriever, RouterRetriever
 from llama_index.core.tools import RetrieverTool
 from llama_index.core.chat_engine import CondensePlusContextChatEngine
-from llama_index.embeddings.huggingface import HuggingFaceInferenceAPIEmbedding
+from llama_index.embeddings.jinaai import JinaEmbedding
 from llama_index.llms.gemini import Gemini
+from llama_index.postprocessor.jinaai_rerank import JinaRerank
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 load_dotenv()
@@ -30,12 +30,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 CHROMA_DIR = BASE_DIR / "models" / "chroma_db"
 
-_EMBED_MODEL = "BAAI/bge-m3"
+_EMBED_MODEL = "jina-embeddings-v3"
 _LLM_MODEL = "models/gemini-2.5-flash-lite"
 _COLLECTION = "isrc_rag"
 _TOP_K = 10
 _SIMILARITY_CUTOFF = 0.3
-_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
+_RERANKER_MODEL = "jina-reranker-v2-base-multilingual"
 _RERANK_TOP_N = 3
 _CHUNK_SIZE = 800
 _CHUNK_OVERLAP = 120
@@ -76,20 +76,21 @@ _CONDENSE_QUESTION_PROMPT = PromptTemplate(
 def _init_settings() -> None:
     """配置 LlamaIndex 的全域模型參數與文字切分器設定"""
     api_key = os.getenv("GEMINI_API_KEY")
-    hf_token = os.getenv("HF_TOKEN")
+    jina_api_key = os.getenv("JINAAI_API_KEY")
     if not api_key:
         raise RuntimeError("記得去 .env 填寫 GEMINI_API_KEY")
-    if not hf_token:
-        raise RuntimeError("記得去 .env 填寫 HF_TOKEN（用於 Hugging Face Inference API）")
+    if not jina_api_key:
+        raise RuntimeError("記得去 .env 填寫 JINAAI_API_KEY（用於 Jina AI API）")
 
     Settings.text_splitter = SentenceSplitter(
         chunk_size=_CHUNK_SIZE,
         chunk_overlap=_CHUNK_OVERLAP,
     )
-    Settings.embed_model = HuggingFaceInferenceAPIEmbedding(
-        model_name=_EMBED_MODEL,
-        token=hf_token,
-        timeout=60,
+    Settings.embed_model = JinaEmbedding(
+        api_key=jina_api_key,
+        model=_EMBED_MODEL,
+        task="retrieval.passage",
+        embed_batch_size=8,
     )
     Settings.llm = Gemini(
         model=_LLM_MODEL,
@@ -162,81 +163,18 @@ class _ConditionalRerankerPostprocessor:
         return self._inner_reranker.postprocess_nodes(nodes, query_bundle=query_bundle)
 
 
-class _HFInferenceRerankerPostprocessor:
-    """透過 Hugging Face Inference API 進行 rerank。"""
-
-    def __init__(self, model_name: str, token: str, top_n: int, timeout: float = 30.0):
-        self._model_name = model_name
-        self._top_n = top_n
-        self._timeout = timeout
-        self._url = f"https://router.huggingface.co/hf-inference/models/{model_name}"
-        self._headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        }
-
-    """"Defensive Programming"""
-    @staticmethod
-    def _extract_score(item) -> float:
-        if isinstance(item, (int, float)):
-            return float(item)
-
-        """目前格式適用的解析方式"""
-        if isinstance(item, dict):
-            score = item.get("score")
-            if isinstance(score, (int, float)):
-                return float(score)
-
-        if isinstance(item, list) and item:
-            includedScoresList = [x for x in item if isinstance(x, dict) and isinstance(x.get("score"), (int, float))]
-            if includedScoresList:
-                includedScoresList.sort(key=lambda x: x["score"], reverse=True)
-                return float(includedScoresList[0]["score"])
-
-        return 0.0
-
-    def postprocess_nodes(self, nodes, query_bundle=None):
-        if not nodes:
-            return nodes
-
-        query = getattr(query_bundle, "query_str", "") if query_bundle else ""
-        if not query:
-            return nodes
-
-        rescored_nodes = []
-        for item in nodes:
-            payload = {"inputs": [{"text": query, "text_pair": item.node.get_content()}]}
-            response = requests.post(
-                self._url,
-                headers=self._headers,
-                json=payload,
-                timeout=self._timeout,
-            )
-            response.raise_for_status()
-            raw = response.json()
-            if isinstance(raw, list) and raw:
-                raw_score = raw[0]
-            else:
-                raw_score = raw
-            rescored_nodes.append(NodeWithScore(node=item.node, score=self._extract_score(raw_score)))
-
-        rescored_nodes.sort(key=lambda x: x.score if x.score is not None else float("-inf"), reverse=True)
-        return rescored_nodes[: self._top_n]
-    
-
 class MultiTurnRAGService:
     """提供支援多輪對話記憶與 RAG 檢索功能的後端服務類別"""
 
     def __init__(self, index: VectorStoreIndex | None = None):
         """根據傳入索引初始化具備 Context 模式的路由對話引擎"""
         self._index = index or _build_index()
-        hf_token = os.getenv("HF_TOKEN")
+        jina_api_key = os.getenv("JINAAI_API_KEY")
         reranker = _ConditionalRerankerPostprocessor(
-            inner_reranker=_HFInferenceRerankerPostprocessor(
-                model_name=_RERANKER_MODEL,
-                token=hf_token or "",
+            inner_reranker=JinaRerank(
+                api_key=jina_api_key or "",
+                model=_RERANKER_MODEL,
                 top_n=_RERANK_TOP_N,
-                timeout=30,
             )
         )
         
