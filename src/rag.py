@@ -34,7 +34,6 @@ _EMBED_MODEL = "jina-embeddings-v3"
 _LLM_MODEL = "models/gemini-2.5-flash-lite"
 _COLLECTION = "isrc_rag"
 _TOP_K = 10
-_SIMILARITY_CUTOFF = 0.3
 _RERANKER_MODEL = "jina-reranker-v2-base-multilingual"
 _RERANK_TOP_N = 3
 _CHUNK_SIZE = 800
@@ -197,10 +196,7 @@ class MultiTurnRAGService:
             memory=ChatMemoryBuffer.from_defaults(token_limit=_MEMORY_TOKEN_LIMIT),
             context_prompt=_COT_TEMPLATE,
             condense_prompt=_CONDENSE_QUESTION_PROMPT,
-            node_postprocessors=[
-                SimilarityPostprocessor(similarity_cutoff=_SIMILARITY_CUTOFF),
-                reranker,
-            ],
+            node_postprocessors=[reranker]
         )
 
     def new_session(self) -> "MultiTurnRAGService":
