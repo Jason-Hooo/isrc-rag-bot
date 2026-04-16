@@ -2,7 +2,7 @@ streamlit
 llama-index-core
 llama-index-embeddings-jinaai
 llama-index-postprocessor-jinaai-rerank
-llama-index-llms-gemini
+llama-index-llms-google-genai
 llama-index-vector-stores-chroma
 llama-index-readers-file
 chromadb
