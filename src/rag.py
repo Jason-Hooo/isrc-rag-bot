@@ -30,12 +30,12 @@ CHROMA_DIR = BASE_DIR / "models" / "chroma_db"
 _EMBED_MODEL = "jina-embeddings-v3"
 _LLM_MODEL = "gemini-2.5-flash-lite"
 _COLLECTION = "isrc_rag"
-_TOP_K = 10
+_TOP_K = 20
 _RERANKER_MODEL = "jina-reranker-v2-base-multilingual"
-_RERANK_TOP_N = 3
-_CHUNK_SIZE = 800
-_CHUNK_OVERLAP = 120
-_TEMPERATURE = 0.4
+_RERANK_TOP_N = 5
+_CHUNK_SIZE = 450
+_CHUNK_OVERLAP = 60
+_TEMPERATURE = 0.35
 
 _SYSTEM_PROMPT = (
     "你是在政大服務的『原資智慧服務 AI 機器人』，是大家最親近、最懂彼此心聲的好夥伴！\n"
