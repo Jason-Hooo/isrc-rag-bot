@@ -8,7 +8,7 @@ from src.rag import MultiTurnRAGService
 from src.sheets_logger import log_to_sheet
 
 
-st.set_page_config(page_title="原資智慧服務 AI 機器人")
+st.set_page_config(page_title="原寶 - 原資中心智慧服務 AI 機器人")
 
 
 @st.cache_resource(show_spinner="正在載入中，請稍候…") # 全域共用
@@ -16,7 +16,7 @@ def load_service():
     return MultiTurnRAGService()
 
 
-st.title("原資智慧服務 AI 機器人")
+st.title("原寶 - 原資中心智慧服務 AI 機器人")
 st.caption(
     "協助同學查詢原住民族獎助學金、學雜費減免、住宿權益、文化活動與校園支持資源的對話式小幫手。"
 )
@@ -36,7 +36,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "哈囉夥伴，我是原資智慧服務小幫手。想先了解獎助學金、學雜費減免、住宿權益，還是文化活動與校園支持資源呢？",
+            "content": "哈囉夥伴，我是原寶，是原資智慧服務小幫手。想先了解獎助學金、學雜費減免、住宿權益，還是文化活動與校園支持資源呢？",
             "sources": []
         }
     ]
