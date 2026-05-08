@@ -1,0 +1,283 @@
+body, html {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  background-color: #0A0A0A; 
+}
+
+.app-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #0A0A0A;
+  color: #FAFAFA;
+  font-family: sans-serif;
+  overflow: hidden;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  height: 60px;
+  background-color: #111;
+  border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+  padding: 0 20px;
+}
+
+.logo-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap; /* 確保 Logo 不會被換行或擠壓 */
+}
+
+.logo-icon {
+  font-size: 1.5rem; /* 調整 icon 大小 */
+}
+
+.logo-text {
+  font-size: 1.5rem;
+  color: #FFD700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  margin: 0; /* ✨ 關鍵修復：清除 h1 預設的上下間距 */
+  line-height: 1; /* 確保文字垂直置中 */
+}
+
+.marquee-container {
+  flex: 1; /*：讓跑馬燈乖乖佔據剩餘空間，不往左邊擠 */
+  overflow: hidden;
+  background: rgba(211, 47, 47, 0.1);
+  border-radius: 20px;
+  border: 1px solid rgba(211, 47, 47, 0.3);
+  margin-left: 20px;
+  display: flex;
+  align-items: center;
+}
+.marquee-text {
+  display: inline-block;
+  white-space: nowrap;
+  padding: 5px 15px;
+  color: #ff8a8a;
+  animation: scrollText 15s linear infinite;
+}
+
+@keyframes scrollText {
+  from { transform: translateX(100%); }
+  to { transform: translateX(-100%); }
+}
+
+.main-content {
+  display: flex;
+  flex-grow: 1;
+  padding: 20px;
+  gap: 20px;
+  height: calc(100vh - 60px);
+  overflow: hidden; /* ✨ 新增：鎖死整個主內容區，絕對不允許超出螢幕 */
+}
+
+/* 聊天區域設定為相對位置，為了放右上角的按鈕 */
+.chat-section {
+  flex: 7;
+  display: flex;
+  flex-direction: column;
+  background: #141414;
+  border-radius: 20px;
+  padding: 20px;
+  position: relative; 
+  min-height: 0; /* 強迫它在壓縮時不能無限長大，這樣內部的滾動條才會跑出來 */
+}
+
+/* ====== 重新開啟對話按鈕 ====== */
+.restart-btn {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  background: rgba(255, 215, 0, 0.05);
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  color: #FFD700;
+  padding: 8px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s;
+  z-index: 10;
+}
+.restart-btn:hover {
+  background: rgba(255, 215, 0, 0.15);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.chat-history {
+  flex-grow: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px; /* 拉開不同對話的間距 */
+  padding-top: 35px; /* 為了避開右上角按鈕 */
+  padding-bottom: 20px; /* ✨ 新增：底部留點呼吸空間，免得對話貼死在輸入框上 */
+}
+
+/* ====== 對話訊息的外層容器 ====== */
+.message-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.wrapper-user { align-items: flex-end; }
+.wrapper-ai { align-items: flex-start; }
+
+.message-bubble {
+  padding: 15px;
+  border-radius: 15px;
+  max-width: 80%;
+  line-height: 1.5;
+}
+
+.msg-ai {
+  background: rgba(255, 215, 0, 0.05);
+  border-left: 4px solid #FFD700;
+}
+
+.msg-user {
+  background: rgba(211, 47, 47, 0.08);
+  border-right: 4px solid #D32F2F;
+}
+
+/* ====== 問答框下方的動態快捷分類 ====== */
+.dynamic-categories {
+  margin-top: 10px;
+  margin-left: 5px; /* 與機器人對話氣泡稍微對齊 */
+  max-width: 80%;
+}
+
+.category-buttons {
+  display: flex;
+  gap: 15px;
+}
+
+.main-cat-btn {
+  flex: 1;
+  background: rgba(255, 215, 0, 0.05);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  color: #FFD700;
+  padding: 12px 25px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 1rem;
+}
+.main-cat-btn:hover {
+  background: rgba(255, 215, 0, 0.2);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.sub-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.sub-title {
+  color: #FFD700;
+  font-size: 0.95rem;
+}
+
+.back-btn {
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: color 0.3s;
+}
+.back-btn:hover { color: #fff; }
+
+.category-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.sub-cat-btn {
+  background: rgba(211, 47, 47, 0.05);
+  border: 1px solid rgba(211, 47, 47, 0.3);
+  color: #ff8a8a;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: left;
+}
+.sub-cat-btn:hover {
+  background: rgba(211, 47, 47, 0.15);
+  box-shadow: 0 0 10px rgba(211, 47, 47, 0.2);
+  border-color: #D32F2F;
+}
+
+/* ====== 全局淡入特效 ====== */
+.fade-in {
+  animation: fadeIn 0.4s ease-in-out forwards;
+}
+
+.fade-in-msg {
+  animation: fadeInMsg 0.5s ease-out forwards;
+}
+
+/* 我們新增一個 fade-in-delayed */
+.fade-in-delayed {
+  animation: fadeInMsg 0.5s ease-out forwards;
+  animation-delay: 0.6s; /* ✨ 關鍵：延遲 0.6 秒才開始動畫 */
+  opacity: 0; /* 在動畫開始前保持隱藏 */
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInMsg {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 輸入區與側邊欄 */
+.input-area {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.glow-input {
+  flex-grow: 1;
+  background: #000;
+  color: #fff;
+  border: 1px solid rgba(255, 215, 0, 0.5);
+  border-radius: 25px;
+  padding: 15px 20px;
+  outline: none;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.1);
+  font-size: 1rem;
+}
+
+.send-btn {
+  background: #FFD700;
+  color: #000;
+  border: none;
+  border-radius: 25px;
+  padding: 0 25px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.sidebar-section {
+  flex: 3;
+  background: #111;
+  border-radius: 20px;
+  padding: 25px;
+  border: 1px solid rgba(211, 47, 47, 0.2);
+}
+
+.sidebar-title { color: #FFD700; font-size: 1.1rem; margin-bottom: 20px; }
+.history-item { background: #1A1A1A; padding: 12px; border-radius: 8px; margin-bottom: 10px; font-size: 0.95rem; color: #ccc;}
+.empty-history { color: #555; text-align: center; font-style: italic; margin-top: 20px; }

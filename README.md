@@ -1,72 +1,99 @@
-# 原寶 (isrc-rag-bot) - 政大原資中心小幫手
+這是一份為你的專案 **「政大原資中心 AI 智慧服務 - 原寶 (ISRC-RAG-BOT)」** 量身打造的 README 檔案。這份檔案整合了我們剛剛完成的架構大改版、UI/UX 優化以及核心 RAG 技術的更新。
 
-這是一個基於檢索增強生成 (Agentic RAG) 技術開發的 AI 問答機器人「原寶」，專為**國立政治大學原住民族學生資源中心 (ISRC)** 打造。旨在透過充滿溫度與親切的語氣，協助同學與教職員查詢校園原住民相關資源、獎助學金、學雜費減免、住宿權益以及文化活動等資訊。
+---
 
-## 系統架構與相關資訊
+# 🏮 原寶 - 政大原資中心 AI 智慧服務 RAG Bot
 
-- **RAG 框架**: LlamaIndex (使用 AgentWorkflow 支援多輪對話與工具呼叫)
-- **語言模型 (LLM)**: Google Gemini 2.5 Flash (`gemini-2.5-flash`)
-- **嵌入模型 (Embedding)**: JinaAI (`jina-embeddings-v3`)
-- **重排序模型 (Reranker)**: JinaAI (`jina-reranker-v2-base-multilingual`)
-- **向量資料庫**: ChromaDB (本地儲存)
-- **前端介面**: Streamlit
-- **問答紀錄與遙測**: Google Sheets API (透過 Service Account 紀錄使用者對話)
+「原寶」是專為國立政治大學原住民族學生資源中心（原資中心）開發的 AI 智慧對話機器人。旨在協助校園夥伴與原住民同學快速查詢獎助學金、學雜費減免、住宿權益、文化活動及校園支持資源，並提供具有溫度、親切且專業的互動體驗。
 
-## 專案目錄結構
+## 🚀 近期重大更新 (2026.05)
+
+本專案近期完成了從單一 Streamlit 應用轉向 **現代化前後端分離架構** 的重大升級：
+
+### 1. 架構遷移：React + FastAPI
+
+* **前端轉型**：捨棄 Streamlit，全面改用 **React (Vite)** 構建，實現像素級的 UI 精細度與順滑的動畫效果。
+* **後端強化**：”未完成“使用 **FastAPI** 重新建構 API 入口，提升響應速度與擴展性。
+
+### 2. UI/UX 深度優化 (Dribbble 科技感風格)
+
+* **視覺設計**：採用深色模式 (Dark Mode)，結合金黃色發光特效 (Golden Glow) 與原住民文化象徵的紅色系點綴。
+* **佈局重整**：
+* **頂部導覽列**：包含「原寶」Logo 與動態跑馬燈，用於展示原資中心最新活動資訊。
+* **對話區 (左側)**：支援自動滾動與訊息淡入動畫。
+* **功能區 (右側)**：獨立顯示「此次查詢紀錄」，並支援獨立滾動。
+
+
+* **互動式快捷分類**：
+* 首創「對話氣泡附屬組件」，將分類按鈕直接整合於機器人歡迎訊息下方。
+* 支援層級導覽：主分類（行政類/議題類）點擊後淡出切換至細項分類。
+* 內建延遲動畫，確保對話框先出、分類按鈕後出的優雅視覺順序。
+
+
+
+### 3. RAG 檢索技術升級
+
+* **Metadata (元資料) 應用**：為文件塊貼上年份、類別標籤，解決資訊時效性問題並實現精準過濾。
+* **混合搜尋 (Hybrid Search)**：結合向量搜尋 (Vector) 與關鍵字搜尋 (BM25)，提升對專有名詞的檢索準確率。
+* **重排序 (Re-ranking)**：整合 Jina Rerank 模型，大幅降低 AI 幻覺。
+
+---
+
+## 🛠 技術棧
+
+* **前端**: React (Vite), CSS3 (Flexbox/Grid, Animations)
+* **後端**: Python 3.12, FastAPI, Uvicorn
+* **AI 框架**: LlamaIndex (Agentic Workflow)
+* **模型**: Google Gemini (LLM), Jina AI (Embedding & Rerank)
+* **向量資料庫**: ChromaDB
+* **日誌系統**: Google Sheets API (自動紀錄對話與來源)
+
+---
+
+## 📂 專案架構
 
 ```text
-.
-├── data/                  # 知識庫原始文件 (.txt, .pdf, .docx)
-│   ├── 文化活動與社群連結/
-│   ├── 原住民族學生升學管道/
-│   ├── 獎助學金與行政庶務/
-│   ├── 學習與校園生活支持/
-│   └── 職涯與發展/
-├── models/
-│   └── chroma_db/         # ChromaDB 向量資料庫（由系統自動產生）
-├── src/
-│   ├── rag.py             # RAG 核心大腦 (讀取、切塊、建立索引與檢索)
-│   └── sheets_logger.py   # 自動寫入 Google Sheets 的紀錄模組
-├── app.py                 # Streamlit 應用程式前端主檔案
-├── README.md              # 專案說明文件
-├── requirements.txt       # Python 套件依賴清單
-└── .env                   # 環境變數設定檔 (需手動建立)
+isrc-rag-bot/
+├── backend/                # Python 後端服務
+│   ├── api.py              # FastAPI 進入點
+│   ├── src/
+│   │   ├── rag.py          # RAG 核心邏輯 (索引、檢索、代理)
+│   │   └── sheets_logger.py # Google Sheets 紀錄邏輯
+│   ├── data/               # 行政法規與公告原始文件 (.txt, .pdf)
+│   ├── models/             # 持久化向量數據庫 (Chroma)
+│   └── .venv/              # 後端虛擬環境
+│
+└── frontend/               # React 前端應用
+    ├── src/
+    │   ├── App.jsx         # 主要邏輯、動畫與 UI 結構
+    │   ├── App.css         # 科技感視覺樣式、發光效果、動畫定義
+    │   └── main.jsx        # 前端渲染入口
+    └── index.html
+
 ```
 
-## 部署與本機啟動設定
+---
 
-### 1. 安裝環境與相依套件
+## ⚙️ 快速上手
 
-請確認系統已安裝 Python 3.11 或以上版本，並建議使用虛擬環境：
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
+### 1. 後端設定 (Backend)
 
-### 2. 環境變數設定 (`.env`)
+1. 進入 `backend` 資料夾：`cd backend`
+2. 啟動虛擬環境：`source .venv/bin/activate`
+3. 安裝依賴：`pip install -r requirements.txt`
+4. 設定 `.env` 檔案，包含 `GEMINI_API_KEY` 與 `JINAAI_API_KEY`。
+5. 啟動 API 伺服器：`uvicorn api:app --reload`
 
-請在專案根目錄下建立 `.env` 檔案，並填入以下必要的 API 金鑰與設定檔：
-```env
-GEMINI_API_KEY="你的_Google_Gemini_API_Key"
-JINAAI_API_KEY="你的_JinaAI_API_Key"
+### 2. 前端設定 (Frontend)
 
-# Google Sheets 紀錄用 (選用)
-# 若要紀錄使用者對話，請填上 Google Service Account JSON 與試算表名稱
-GOOGLE_CREDENTIALS_JSON='{"type": "service_account", ...}'
-GOOGLE_SHEET_NAME="你的_工作表_名稱"
-```
+1. 進入 `frontend` 資料夾：`cd frontend`
+2. 安裝套件：`npm install`
+3. 啟動開發伺服器：`npm run dev`
+4. 點擊終端機產生的網址（預設為 `http://localhost:5173`）即可開始對話。
 
-### 3. 資料建置規範
+---
 
-您可以將任何與原資中心相關的資料檔放入 `data/` 目錄中，支援的格式為 `.pdf`、`.docx`、`.txt`。
-**重要注意事項**：所有的 `.txt` 檔案必須儲存為 **UTF-8** 編碼，以避免 LlamaIndex 在讀取或產出 Embedding 時出現中文字亂碼。
+## 📌 未來展望
 
-### 4. 啟動服務
-
-啟動 Streamlit 伺服器：
-```bash
-streamlit run app.py
-```
-執行後，瀏覽器將會自動開啟 `http://localhost:8501`。首次啟動時，系統將會自動讀取 `data/` 下所有文件並預處理建立 ChromaDB 向量索引（需要一些時間）。
+* 等待Jason把前後端串接FastAPI處理完成
 
