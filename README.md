@@ -2,6 +2,8 @@
 
 這是一個基於檢索增強生成 (Agentic RAG) 技術開發的 AI 問答機器人「原寶」，專為**國立政治大學原住民族學生資源中心 (ISRC)** 打造。旨在透過充滿溫度與親切的語氣，協助同學與教職員查詢校園原住民相關資源、獎助學金、學雜費減免、住宿權益以及文化活動等資訊。
 
+**Live Demo：** [https://jasonhoooooo-isrc-rag-bot.hf.space](https://jasonhoooooo-isrc-rag-bot.hf.space)
+
 ## 系統架構與相關資訊
 
 - **RAG 框架**: LlamaIndex (使用 AgentWorkflow 支援多輪對話與工具呼叫)
