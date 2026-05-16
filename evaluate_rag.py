@@ -63,7 +63,7 @@ def _ragas_score(question: str, answer: str, contexts: list[str], gt: str) -> tu
                 raise
 
 
-START_QUESTION = 6   # 從第幾題開始（1 = 第一題）
+START_QUESTION = 1   # 從第幾題開始（1 = 第一題）
 END_QUESTION   = None   # 到第幾題結束（None = 跑到最後一題）
 FORCE_REBUILD  = True  # True = 強制刪除舊索引重建；False = 沿用現有索引
 
