@@ -79,7 +79,7 @@ async def evaluate_task():
             "https://www.googleapis.com/auth/drive",
         ]
         creds = Credentials.from_service_account_info(creds_dict).with_scopes(scopes)
-        ws = gspread.authorize(creds).open(os.getenv("GOOGLE_SHEET_NAME")).worksheet("工作表1")
+        ws = gspread.authorize(creds).open("RAGAS評分").worksheet("工作表1")
     except Exception as e:
         print(f"❌ Google Sheet 連線失敗: {e}")
         return
