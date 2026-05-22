@@ -12,13 +12,14 @@ from llama_index.core import (
     VectorStoreIndex,
 )
 from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.tools import QueryEngineTool, ToolMetadata
+from llama_index.core.tools import FunctionTool
 from llama_index.core.workflow import Context
 from llama_index.core.agent.workflow import FunctionAgent, AgentWorkflow
 from llama_index.core.agent.workflow.workflow_events import AgentStream, ToolCallResult
+from llama_index.core.vector_stores import MetadataFilter, FilterOperator, MetadataFilters
 from llama_index.embeddings.jinaai import JinaEmbedding
-from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.postprocessor.jinaai_rerank import JinaRerank
+from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 load_dotenv()
@@ -36,32 +37,68 @@ _RERANK_TOP_N = 5
 _CHUNK_SIZE = 450
 _CHUNK_OVERLAP = 60
 _TEMPERATURE = 0.35
+_CATEGORY_FIELD = "category"
+_CATEGORIES = (
+    "文化活動與社群連結",
+    "原住民族學生升學管道",
+    "獎助學金與行政庶務",
+    "學習與校園生活支持",
+    "職涯與發展",
+)
+_CATEGORY_SET = set(_CATEGORIES)
 
 _SYSTEM_PROMPT = (
     "你是在政大原資中心服務的『原寶』，是原資中心智慧服務 AI 機器人，是大家最親近、最懂彼此心聲的好夥伴！\n"
     "你的工作是陪伴政大的同學與教職員，特別是關心我們原住民族夥伴在校園裡的需求與心情。\n"
     "說話風格：親切、溫柔、充滿部落的熱情與包容，說話就像在校園閒聊一樣自然。\n"
     "回覆內容：談話內容避免涉及敏感的政治、宗教、私人議題，應具備條理，重點清晰。"
-    "回覆長度：已回覆的完整性為優先，其次才是把盡量控制在 100 字以內。\n\n"
+    "回覆長度：以回覆的完整性為優先，其次才是把字數盡量控制在 100 字以內。\n\n"
     "【思考與執行流程】\n"
     "請你在每次收到夥伴的問題時，在心裡依照以下步驟進行思考並給出回答：\n"
     "1. 判斷情境：分析這是否為單純的日常寒暄與關心問候。\n"
-    "2. 判斷是否調用`isrc_knowledge_base` 工具：\n"
-    "   - 除了單純的寒暄問候外，無論夥伴詢問任何實質問題（如如政大原資中心、各類活動、升學管道、住宿、獎學金與學雜費減免、校園生活支持、職涯發展等），你都【必須先呼叫 `isrc_knowledge_base` 工具】檢索資料。\n"
-    "   - 若呼叫工具後有獲得相關資訊，請從中精確擷取關鍵段落，並轉化為口語、帶有溫度的回覆。\n"
+    "2. 判斷是否調用 `isrc_knowledge_base` 工具：\n"
+    "   - 除了單純的寒暄問候外，只要夥伴詢問任何實質問題（如政大原資中心、各類活動、升學管道、住宿、獎學金與學雜費減免、校園生活支持、職涯發展等），你都【必須先呼叫 `isrc_knowledge_base` 工具】檢索資料。\n"
+    "   - 呼叫工具時，若能判斷問題類別（可多選），請優先在 `categories` 參數傳入以下陣列元素：文化活動與社群連結、原住民族學生升學管道、獎助學金與行政庶務、學習與校園生活支持、職涯與發展。\n"
+    "   - 若無法確定問題屬於哪個類別，請直接保持 `categories` 參數空白，讓系統進行全面搜尋。\n"
     "   - 若為單純的日常寒暄，或是明確在工具中找不到答案，請直接以最親近、自然的語氣給予陪伴或答覆，絕對不可亂編。\n"
     "3. 組織輸出：回答時，請「先從問題的答案開始講起」，讓夥伴可以第一時間抓住重點，並確保最後的語氣完整且溫暖。"
 )
 
 
+def _resolve_category_from_path(file_path: str) -> str | None:
+    """依檔案路徑判斷資料類別"""
+    try:
+        rel_path = Path(file_path).resolve().relative_to(DATA_DIR.resolve())
+    except ValueError:
+        return None
+    if not rel_path.parts:
+        return None
+    top_level = rel_path.parts[0]
+    if top_level in _CATEGORY_SET:
+        return top_level
+    return None
+
+
+def _build_file_metadata(file_path: str) -> dict:
+    """建立檔案層級的 metadata"""
+    metadata = {"source_path": file_path}
+    category = _resolve_category_from_path(file_path)
+    if category:
+        metadata[_CATEGORY_FIELD] = category
+    return metadata
+
+
 def _init_settings() -> None:
     """配置 LlamaIndex 的全域模型參數與文字切分器設定"""
-    api_key = os.getenv("GEMINI_API_KEY")
     jina_api_key = os.getenv("JINAAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("記得去 .env 填寫 GEMINI_API_KEY")
+    vertex_project = os.getenv("GOOGLE_CLOUD_PROJECT")
+    vertex_location = os.getenv("GOOGLE_CLOUD_LOCATION")
     if not jina_api_key:
         raise RuntimeError("記得去 .env 填寫 JINAAI_API_KEY")
+    if not vertex_project:
+        raise RuntimeError("記得去 .env 填寫 GOOGLE_CLOUD_PROJECT")
+    if not vertex_location:
+        raise RuntimeError("記得去 .env 填寫 GOOGLE_CLOUD_LOCATION")
 
     Settings.text_splitter = SentenceSplitter(
         chunk_size=_CHUNK_SIZE,
@@ -74,9 +111,13 @@ def _init_settings() -> None:
         embed_batch_size=8,
     )
     Settings.llm = GoogleGenAI(
-        model=_LLM_MODEL, 
-        api_key=api_key,
+        model=_LLM_MODEL,
+        vertexai_config={
+            "project": vertex_project,
+            "location": vertex_location,
+        },
         temperature=_TEMPERATURE,
+        max_retries=10,
     )
 
 def _build_index() -> VectorStoreIndex:
@@ -93,6 +134,7 @@ def _build_index() -> VectorStoreIndex:
             input_dir=str(DATA_DIR),
             recursive=True,
             required_exts=[".txt", ".pdf", ".docx"],
+            file_metadata=_build_file_metadata,
         ).load_data()
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
         return VectorStoreIndex.from_documents(
@@ -102,6 +144,59 @@ def _build_index() -> VectorStoreIndex:
         )
 
     return VectorStoreIndex.from_vector_store(vector_store)
+
+
+def _build_search_isrc_knowledge_tool(index: VectorStoreIndex, reranker: JinaRerank) -> FunctionTool:
+    """建立可由 Agent 呼叫的原資中心知識庫工具。"""
+    base_query_engine = index.as_query_engine(
+        similarity_top_k=_TOP_K,
+        node_postprocessors=[reranker],
+    )
+
+    def _build_categories_filters(categories: list[str]) -> MetadataFilters:
+        """建立指定類別的 MetadataFilters。"""
+        return MetadataFilters(
+            filters=[
+                MetadataFilter(key=_CATEGORY_FIELD, value=categories, operator=FilterOperator.IN)
+            ]
+        )
+
+    def search_isrc_knowledge(query: str, categories: list[str] = None):
+        """查詢原資中心知識庫，必要時可用 categories 陣列限縮一個或多個檢索範圍。"""
+        if not categories:
+            categories = []
+
+        valid_categories = [c for c in categories if c in _CATEGORY_SET]
+
+        if not valid_categories:
+            print(f"全類別搜尋，無指定類別或類別不匹配，categories = {categories}")
+            return base_query_engine.query(query)
+        
+        filtered_query_engine = index.as_query_engine(
+            similarity_top_k=_TOP_K,
+            node_postprocessors=[reranker],
+            filters=_build_categories_filters(valid_categories),
+        )
+        
+        response = filtered_query_engine.query(query)
+        
+        if getattr(response, "source_nodes", None):
+            print(f"僅搜尋: {valid_categories} 類別，成功找到相關資訊")
+            return response
+            
+        print(f"僅搜尋: {valid_categories} 類別，但沒有找到任何資訊，退回全域搜尋")
+        return base_query_engine.query(query)
+
+    return FunctionTool.from_defaults(
+        fn=search_isrc_knowledge,
+        name="isrc_knowledge_base",
+        description=(
+            "原資中心專屬知識庫。除了單純的寒暄問候外，任何實質資訊都必須優先使用此工具檢索。"
+            "若能判斷問題包含一個或多個類別，請在 categories 參數中以「字串陣列 (List)」格式傳入，"
+            "例如：['文化活動與社群連結', '學習與校園生活支持']。"
+            "可選類別包含：文化活動與社群連結、原住民族學生升學管道、獎助學金與行政庶務、學習與校園生活支持、職涯與發展。"
+        ),
+    )
 
 
 class MultiTurnRAGService:
@@ -116,26 +211,15 @@ class MultiTurnRAGService:
             model=_RERANKER_MODEL,
             top_n=_RERANK_TOP_N,
         )
-        
-        query_engine = self._index.as_query_engine(
-            similarity_top_k=_TOP_K,
-            node_postprocessors=[reranker]
-        )
 
-        vector_tool = QueryEngineTool(
-            query_engine=query_engine,
-            metadata=ToolMetadata(
-                name="isrc_knowledge_base",
-                description="此為原資中心專屬知識庫。除了單純的字面寒暄問候外，當夥伴詢問任何實質資訊（如政大原資中心、各類活動、升學管道、住宿、獎學金與學雜費減免、校園生活支持、職涯發展等）時，都必須優先使用此工具進行檢索。"
-            )
-        )
+        vector_tool = _build_search_isrc_knowledge_tool(self._index, reranker)
 
         self.agent = FunctionAgent(
             name="isrc_agent",
             description="政大原資中心智慧夥伴",
             system_prompt=_SYSTEM_PROMPT,
             tools=[vector_tool],
-            llm=Settings.llm,
+            llm=Settings.llm
         )
 
         self.workflow = AgentWorkflow(agents=[self.agent], root_agent=self.agent.name)
