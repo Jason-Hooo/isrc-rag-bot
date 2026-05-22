@@ -3,6 +3,7 @@ llama-index-core
 llama-index-embeddings-jinaai
 llama-index-postprocessor-jinaai-rerank
 llama-index-llms-google-genai
+llama-index-llms-vertex
 llama-index-vector-stores-chroma
 llama-index-readers-file
 chromadb
