@@ -54,6 +54,16 @@ if st.button("重新開啟對話"):
     ]
     st.rerun()
 
+question = st.chat_input("輸入你的問題...")
+
+if question:
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": question,
+        }
+    )
+
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
@@ -65,45 +75,45 @@ for message in st.session_state.messages:
                     st.write(src)
                     st.divider()
 
-question = st.chat_input("輸入你的問題...")
+stream_slot = st.empty()
 
 if question:
-    st.session_state.messages.append(
-        {
-            "role": "user",
-            "content": question,
-        }
-    )
+    with stream_slot.container():
+        with st.chat_message("assistant"):
+            status_container = st.empty()
 
-    with st.chat_message("user"):
-        st.write(question)
+            def update_status(msg: str):
+                """更新前端狀態提示。"""
+                status_container.info(msg)
 
-    with st.chat_message("assistant"):
-        with st.spinner("小幫手正在思考中…"):
-            stream, meta = st.session_state.chat_session.stream_chat(question=question)
-            answer = st.write_stream(stream)
-            source_nodes = meta.get("source_nodes", []) or []
-            sources = list([node.get_content() for node in source_nodes])
-            st.session_state.turn_index += 1
-            log_to_sheet(
-                conversation_id=st.session_state.conversation_id,
-                turn_index=st.session_state.turn_index,
-                question=question,
-                answer=answer,
-                sources=sources,
-            )
+            st.session_state.chat_session.status_callback = update_status
 
-        if sources:
-            with st.expander("參考來源"):
-                for i, src in enumerate(sources, start=1):
-                    st.markdown(f"**片段 {i}**")
-                    st.write(src)
-                    st.divider()
+            with st.spinner("小幫手正在思考中…"):
+                stream, meta = st.session_state.chat_session.stream_chat(question=question)
+                answer = st.write_stream(stream)
+                status_container.empty()
+                source_nodes = meta.get("source_nodes", []) or []
+                sources = list([node.get_content() for node in source_nodes])
+                st.session_state.turn_index += 1
+                log_to_sheet(
+                    conversation_id=st.session_state.conversation_id,
+                    turn_index=st.session_state.turn_index,
+                    question=question,
+                    answer=answer,
+                    sources=sources,
+                )
+
+            if sources:
+                with st.expander("參考來源"):
+                    for i, src in enumerate(sources, start=1):
+                        st.markdown(f"**片段 {i}**")
+                        st.write(src)
+                        st.divider()
 
     st.session_state.messages.append(
         {
             "role": "assistant",
             "content": answer,
-            "sources": sources
+            "sources": sources,
         }
     )

@@ -146,7 +146,7 @@ def _build_index() -> VectorStoreIndex:
     return VectorStoreIndex.from_vector_store(vector_store)
 
 
-def _build_search_isrc_knowledge_tool(index: VectorStoreIndex, reranker: JinaRerank) -> FunctionTool:
+def _build_search_isrc_knowledge_tool(index: VectorStoreIndex, reranker: JinaRerank, status_callback=None) -> FunctionTool:
     """建立可由 Agent 呼叫的原資中心知識庫工具。"""
     base_query_engine = index.as_query_engine(
         similarity_top_k=_TOP_K,
@@ -161,7 +161,7 @@ def _build_search_isrc_knowledge_tool(index: VectorStoreIndex, reranker: JinaRer
             ]
         )
 
-    def search_isrc_knowledge(query: str, categories: list[str] = None):
+    async def search_isrc_knowledge(query: str, categories: list[str] = None):
         """查詢原資中心知識庫，必要時可用 categories 陣列限縮一個或多個檢索範圍。"""
         if not categories:
             categories = []
@@ -170,7 +170,14 @@ def _build_search_isrc_knowledge_tool(index: VectorStoreIndex, reranker: JinaRer
 
         if not valid_categories:
             print(f"全類別搜尋，無指定類別或類別不匹配，categories = {categories}")
-            return base_query_engine.query(query)
+            msg = "正在搜尋相關資訊中..."
+            if status_callback: status_callback(msg)
+            
+            response = await base_query_engine.aquery(query)
+            if getattr(response, "source_nodes", None):
+                if status_callback: status_callback("成功找到相關資料！正在整理回覆...")
+            
+            return response
         
         filtered_query_engine = index.as_query_engine(
             similarity_top_k=_TOP_K,
@@ -178,17 +185,29 @@ def _build_search_isrc_knowledge_tool(index: VectorStoreIndex, reranker: JinaRer
             filters=_build_categories_filters(valid_categories),
         )
         
-        response = filtered_query_engine.query(query)
+        if status_callback:
+            status_callback(f"正在搜尋相關資訊類別：{', '.join(valid_categories)}...")
+            
+        response = await filtered_query_engine.aquery(query)
         
         if getattr(response, "source_nodes", None):
-            print(f"僅搜尋: {valid_categories} 類別，成功找到相關資訊")
+            msg = f"僅搜尋: {valid_categories} 類別，成功找到相關資訊"
+            print(msg)
+            if status_callback: status_callback("成功找到相關資料！正在整理回覆...")
             return response
             
-        print(f"僅搜尋: {valid_categories} 類別，但沒有找到任何資訊，退回全域搜尋")
-        return base_query_engine.query(query)
+        msg = f"僅搜尋: {valid_categories} 類別，但沒有找到任何資訊，退回全域搜尋"
+        print(msg)
+        if status_callback: status_callback("在指定類別未找到足夠資訊，進行重新搜尋...")
+        
+        fallback_response = await base_query_engine.aquery(query)
+        if getattr(fallback_response, "source_nodes", None):
+            if status_callback: status_callback("已成功找到相關資料！重新整理回覆中...")
+            
+        return fallback_response
 
     return FunctionTool.from_defaults(
-        fn=search_isrc_knowledge,
+        async_fn=search_isrc_knowledge,
         name="isrc_knowledge_base",
         description=(
             "原資中心專屬知識庫。除了單純的寒暄問候外，任何實質資訊都必須優先使用此工具檢索。\n"
@@ -208,6 +227,7 @@ class MultiTurnRAGService:
 
     def __init__(self, index: VectorStoreIndex | None = None, ctx=None):
         self._index = index or _build_index()
+        self.status_callback = None
         jina_api_key = os.getenv("JINAAI_API_KEY")
 
         reranker = JinaRerank(
@@ -216,7 +236,11 @@ class MultiTurnRAGService:
             top_n=_RERANK_TOP_N,
         )
 
-        vector_tool = _build_search_isrc_knowledge_tool(self._index, reranker)
+        def _tool_callback(msg: str):
+            if self.status_callback:
+                self.status_callback(msg)
+
+        vector_tool = _build_search_isrc_knowledge_tool(self._index, reranker, _tool_callback)
 
         self.agent = FunctionAgent(
             name="isrc_agent",
