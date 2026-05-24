@@ -10,7 +10,7 @@
 - **語言模型 (LLM)**: Google Gemini 2.5 Flash (`gemini-2.5-flash`)
 - **嵌入模型 (Embedding)**: JinaAI (`jina-embeddings-v3`)
 - **重排序模型 (Reranker)**: JinaAI (`jina-reranker-v2-base-multilingual`)
-- **向量資料庫**: ChromaDB (本地儲存)
+- **向量資料庫**: Qdrant Cloud
 - **前端介面**: Streamlit
 - **問答紀錄與遙測**: Google Sheets API (透過 Service Account 紀錄使用者對話)
 
@@ -24,8 +24,6 @@
 │   ├── 獎助學金與行政庶務/
 │   ├── 學習與校園生活支持/
 │   └── 職涯與發展/
-├── models/
-│   └── chroma_db/         # ChromaDB 向量資料庫（由系統自動產生）
 ├── src/
 │   ├── rag.py             # RAG 核心大腦 (讀取、切塊、建立索引與檢索)
 │   └── sheets_logger.py   # 自動寫入 Google Sheets 的紀錄模組
@@ -57,6 +55,10 @@ JINAAI_API_KEY="你的_JinaAI_API_Key"
 # 若要紀錄使用者對話，請填上 Google Service Account JSON 與試算表名稱
 GOOGLE_CREDENTIALS_JSON='{"type": "service_account", ...}'
 GOOGLE_SHEET_NAME="你的_工作表_名稱"
+
+# Qdrant Cloud 設定
+QDRANT_URL="https://你的-cluster.qdrant.io"
+QDRANT_API_KEY="你的_Qdrant_API_Key"
 ```
 
 ### 3. 資料建置規範
@@ -70,5 +72,5 @@ GOOGLE_SHEET_NAME="你的_工作表_名稱"
 ```bash
 streamlit run app.py
 ```
-執行後，瀏覽器將會自動開啟 `http://localhost:8501`。首次啟動時，系統將會自動讀取 `data/` 下所有文件並預處理建立 ChromaDB 向量索引（需要一些時間）。
+執行後，瀏覽器將會自動開啟 `http://localhost:8501`。首次啟動時，系統將會自動讀取 `data/` 下所有文件並預處理建立 Qdrant Cloud 向量索引（需要一些時間）。
 
