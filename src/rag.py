@@ -1,9 +1,8 @@
-"""使用 Chroma 與 LlamaIndex 建立支援多輪對話的 Agentic RAG 後端系統"""
+"""使用 Qdrant Cloud 與 LlamaIndex 建立支援多輪對話的 Agentic RAG 後端系統"""
 
 import os
 from pathlib import Path
 
-import chromadb
 from dotenv import load_dotenv
 from llama_index.core import (
     Settings,
@@ -13,6 +12,7 @@ from llama_index.core import (
 )
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.tools import FunctionTool
+from llama_index.core.rate_limiter import TokenBucketRateLimiter
 from llama_index.core.workflow import Context
 from llama_index.core.agent.workflow import FunctionAgent, AgentWorkflow
 from llama_index.core.agent.workflow.workflow_events import AgentStream, ToolCallResult
@@ -20,13 +20,13 @@ from llama_index.core.vector_stores import MetadataFilter, FilterOperator, Metad
 from llama_index.embeddings.jinaai import JinaEmbedding
 from llama_index.postprocessor.jinaai_rerank import JinaRerank
 from llama_index.llms.google_genai import GoogleGenAI
-from llama_index.vector_stores.chroma import ChromaVectorStore
+from llama_index.vector_stores.qdrant import QdrantVectorStore
+from qdrant_client import QdrantClient
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
-CHROMA_DIR = BASE_DIR / "models" / "chroma_db"
 
 _EMBED_MODEL = "jina-embeddings-v3"
 _LLM_MODEL = "gemini-2.5-flash"
@@ -37,6 +37,10 @@ _RERANK_TOP_N = 5
 _CHUNK_SIZE = 450
 _CHUNK_OVERLAP = 60
 _TEMPERATURE = 0.35
+_JINA_EMBED_BATCH_SIZE = 4
+_JINA_NUM_WORKERS = 1
+_JINA_REQUESTS_PER_MINUTE = 80
+_JINA_TOKENS_PER_MINUTE = 80_000
 _CATEGORY_FIELD = "category"
 _CATEGORIES = (
     "文化活動與社群連結",
@@ -88,6 +92,18 @@ def _build_file_metadata(file_path: str) -> dict:
     return metadata
 
 
+def _get_qdrant_client() -> QdrantClient:
+    """建立 Qdrant Cloud 連線用的 client。"""
+    qdrant_url = os.getenv("QDRANT_URL")
+    qdrant_api_key = os.getenv("QDRANT_API_KEY")
+    if not qdrant_url:
+        raise RuntimeError("記得去 .env 填寫 QDRANT_URL")
+    if not qdrant_api_key:
+        raise RuntimeError("記得去 .env 填寫 QDRANT_API_KEY")
+
+    return QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
+
+
 def _init_settings() -> None:
     """配置 LlamaIndex 的全域模型參數與文字切分器設定"""
     jina_api_key = os.getenv("JINAAI_API_KEY")
@@ -108,7 +124,12 @@ def _init_settings() -> None:
         api_key=jina_api_key,
         model=_EMBED_MODEL,
         task="retrieval.passage",
-        embed_batch_size=8,
+        embed_batch_size=_JINA_EMBED_BATCH_SIZE,
+        num_workers=_JINA_NUM_WORKERS,
+        rate_limiter=TokenBucketRateLimiter(
+            requests_per_minute=_JINA_REQUESTS_PER_MINUTE,
+            tokens_per_minute=_JINA_TOKENS_PER_MINUTE,
+        ),
     )
     Settings.llm = GoogleGenAI(
         model=_LLM_MODEL,
@@ -121,15 +142,16 @@ def _init_settings() -> None:
     )
 
 def _build_index() -> VectorStoreIndex:
-    """負責初始化 Chroma 持久化用戶端並建立或加載向量索引"""
+    """負責初始化 Qdrant Cloud 並建立或加載向量索引"""
     _init_settings()
 
-    CHROMA_DIR.mkdir(parents=True, exist_ok=True)
-    chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-    chroma_collection = chroma_client.get_or_create_collection(_COLLECTION)
-    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+    qdrant_client = _get_qdrant_client()
+    vector_store = QdrantVectorStore(client=qdrant_client, collection_name=_COLLECTION)
 
-    if chroma_collection.count() == 0:
+    collection_exists = qdrant_client.collection_exists(collection_name=_COLLECTION)
+    collection_size = qdrant_client.count(collection_name=_COLLECTION, exact=True).count if collection_exists else 0
+
+    if collection_size == 0:
         documents = SimpleDirectoryReader(
             input_dir=str(DATA_DIR),
             recursive=True,

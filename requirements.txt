@@ -4,11 +4,12 @@ llama-index-embeddings-jinaai
 llama-index-postprocessor-jinaai-rerank
 llama-index-llms-google-genai
 llama-index-llms-vertex
-llama-index-vector-stores-chroma
+llama-index-vector-stores-qdrant
 llama-index-readers-file
-chromadb
+qdrant-client
 python-dotenv
 pypdf
 python-docx
 gspread
 google-auth-oauthlib
+docx2txt
