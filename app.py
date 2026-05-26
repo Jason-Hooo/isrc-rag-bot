@@ -2,6 +2,7 @@
 
 import os
 import tempfile
+import asyncio
 from uuid import uuid4
 
 import chainlit as cl
@@ -25,7 +26,6 @@ base_service = MultiTurnRAGService(topic="resources")
 async def on_chat_start():
     cl.user_session.set("chat_session", None)
     
-    # 🌟 秘訣：直接把 chainlit.md 的內容寫在這裡，完美顯示！
     welcome_msg = """## 歡迎來到政大原資中心 AI 智慧服務
 哈囉！我是**原寶**，你的專屬校園小幫手 🌟
 
@@ -45,7 +45,7 @@ async def on_chat_start():
     await cl.Message(
         content=welcome_msg,
         actions=actions,
-        author="Assistant" # 👈 【已修正】統一為大寫 A，確保大頭貼完美顯示
+        author="Assistant"
     ).send()
 
 
@@ -65,7 +65,7 @@ async def on_action(action: cl.Action):
     
     await cl.Message(
         content=f"*(已選擇主題)*\n\n哈囉夥伴，{welcome_text}",
-        author="Assistant" # 👈 統一為大寫 A
+        author="Assistant"
     ).send()
 
 
@@ -79,14 +79,24 @@ async def on_message(message: cl.Message):
 
     question = message.content
     
-    # 建立一個用來回覆的空白 Message 物件
-    msg = cl.Message(content="", author="Assistant") # 👈 統一為大寫 A
-    await msg.send()
+    # 1️⃣ 建立一個獨立的 Message 來顯示進度 (取代原本的 cl.Step)
+    # 這樣它就會直接顯示文字，不會有「已使用」前綴，也不會變成收合選單！
+    status_msg = cl.Message(content="", author="Assistant")
+    await status_msg.send()
 
-    def update_status(status_msg: str):
-        print(f"[系統狀態] {status_msg}")
+    def update_status(status_text: str):
+        # 將狀態文字直接加上去，使用斜體增加提示感 (可自行拿掉星號)
+        status_msg.content += f"👉 *{status_text}*\n"
+        loop = asyncio.get_running_loop()
+        loop.create_task(status_msg.update())
     
     chat_session.status_callback = update_status
+
+    # 2️⃣ 建立機器人的空訊息，準備 Streaming 輸出回答
+    # 因為這個是在 status_msg 之後建立的，所以回答絕對會乖乖排在進度文字的「下方」
+    msg = cl.Message(content="", author="Assistant")
+    await msg.send()
+
     stream_gen, meta = chat_session.stream_chat(question=question)
     
     answer_text = ""
@@ -97,13 +107,12 @@ async def on_message(message: cl.Message):
     source_nodes = meta.get("source_nodes", []) or []
     sources = [node.get_content() for node in source_nodes]
         
-    # 更新最終畫面 (包含附加的參考片段)
     await msg.update()
 
+    # 3️⃣ 顯示參考片段的收合選單 (這個保留 cl.Step 讓它保持可點擊展開)
     if sources:
         for i, src in enumerate(sources, start=1):
             async with cl.Step(name=f"🔍 參考片段 {i}") as step:
-                # 這樣寫，每一個參考片段就會變成獨立的可點擊收合框！
                 step.output = src
                 
     # 紀錄到 Google Sheets
