@@ -42,6 +42,8 @@ async def on_chat_start():
         cl.Action(name="topic_selection", payload={"value": "issues"}, label="💬 原民議題", description="探討原住民相關議題")
     ]
 
+    cl.user_session.set("topic_actions", actions)
+
     await cl.Message(
         content=welcome_msg,
         actions=actions,
@@ -51,6 +53,15 @@ async def on_chat_start():
 
 @cl.action_callback("topic_selection")
 async def on_action(action: cl.Action):
+    # 暴力拔除按鈕
+    actions = cl.user_session.get("topic_actions")
+    if actions:
+        for act in actions:
+            try:
+                await act.remove()
+            except:
+                pass
+    
     topic = action.payload["value"]
     
     chat_session = base_service.new_session(topic=topic)
@@ -58,8 +69,6 @@ async def on_action(action: cl.Action):
     cl.user_session.set("chat_session", chat_session)
     cl.user_session.set("conversation_id", str(uuid4()))
     cl.user_session.set("turn_index", 0)
-    
-    await action.remove()
     
     welcome_text = "想先了解校園資源、獎助學金、學雜費減免、住宿權益，還是文化活動呢？" if topic == "resources" else "這裡可以與你一起討論原住民相關的議題～你對哪方面比較有興趣呢？"
     
@@ -79,21 +88,16 @@ async def on_message(message: cl.Message):
 
     question = message.content
     
-    # 1️⃣ 建立一個獨立的 Message 來顯示進度 (取代原本的 cl.Step)
-    # 這樣它就會直接顯示文字，不會有「已使用」前綴，也不會變成收合選單！
     status_msg = cl.Message(content="", author="Assistant")
     await status_msg.send()
 
     def update_status(status_text: str):
-        # 將狀態文字直接加上去，使用斜體增加提示感 (可自行拿掉星號)
         status_msg.content += f"👉 *{status_text}*\n"
         loop = asyncio.get_running_loop()
         loop.create_task(status_msg.update())
     
     chat_session.status_callback = update_status
 
-    # 2️⃣ 建立機器人的空訊息，準備 Streaming 輸出回答
-    # 因為這個是在 status_msg 之後建立的，所以回答絕對會乖乖排在進度文字的「下方」
     msg = cl.Message(content="", author="Assistant")
     await msg.send()
 
@@ -106,14 +110,21 @@ async def on_message(message: cl.Message):
         
     source_nodes = meta.get("source_nodes", []) or []
     sources = [node.get_content() for node in source_nodes]
+    
+    # 🎯 終極收合選單：使用 HTML 的 details 標籤 (確認標題變更為"點擊查看參考資料")
+    if sources:
+        sources_md = "\n\n---\n<details>\n<summary style='cursor: pointer; font-size: 1.1em;'><b>🔍 點擊查看參考資料 (點我展開)</b></summary>\n\n"
+        
+        for i, src in enumerate(sources, start=1):
+            formatted_src = src.replace('\n', '\n> ')
+            sources_md += f"**📖 片段 {i}**\n> {formatted_src}\n\n"
+            
+        sources_md += "</details>"
+        
+        answer_text += sources_md
+        msg.content = answer_text
         
     await msg.update()
-
-    # 3️⃣ 顯示參考片段的收合選單 (這個保留 cl.Step 讓它保持可點擊展開)
-    if sources:
-        for i, src in enumerate(sources, start=1):
-            async with cl.Step(name=f"🔍 參考片段 {i}") as step:
-                step.output = src
                 
     # 紀錄到 Google Sheets
     turn_index = cl.user_session.get("turn_index") + 1
