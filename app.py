@@ -146,19 +146,24 @@ if question:
             st.session_state.chat_session.status_callback = update_status
 
             with st.spinner("小幫手正在思考中…"):
-                stream, meta = st.session_state.chat_session.stream_chat(question=question)
-                answer = st.write_stream(stream)
-                status_container.empty()
-                source_nodes = meta.get("source_nodes", []) or []
-                sources = list([node.get_content() for node in source_nodes])
-                st.session_state.turn_index += 1
-                log_to_sheet(
-                    conversation_id=st.session_state.conversation_id,
-                    turn_index=st.session_state.turn_index,
-                    question=question,
-                    answer=answer,
-                    sources=sources,
-                )
+                try:
+                    stream, meta = st.session_state.chat_session.stream_chat(question=question)
+                    answer = st.write_stream(stream)
+                    status_container.empty()
+                    source_nodes = meta.get("source_nodes", []) or []
+                    sources = list([node.get_content() for node in source_nodes])
+                    st.session_state.turn_index += 1
+                    log_to_sheet(
+                        conversation_id=st.session_state.conversation_id,
+                        turn_index=st.session_state.turn_index,
+                        question=question,
+                        answer=answer,
+                        sources=sources,
+                    )
+                except Exception as e:
+                    status_container.error(f"發生錯誤: {e}")
+                    st.error(f"對話過程發生錯誤: {e}")
+                    raise
 
             if sources:
                 with st.expander("參考來源"):
