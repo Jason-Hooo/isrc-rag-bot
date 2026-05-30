@@ -22,6 +22,7 @@ from llama_index.postprocessor.jinaai_rerank import JinaRerank
 from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient, AsyncQdrantClient
+from qdrant_client.models import PayloadSchemaType
 
 load_dotenv()
 
@@ -186,33 +187,79 @@ def _init_settings() -> None:
 
 def _build_index() -> VectorStoreIndex:
     """負責初始化 Qdrant Cloud 並建立或加載向量索引"""
-    _init_settings()
+    try:
+        _init_settings()
+    except Exception as e:
+        print(f"[ERROR] 初始化設定失敗: {e}")
+        raise
 
-    client, aclient = _get_qdrant_clients()
-    vector_store = QdrantVectorStore(
-        client=client, 
-        aclient=aclient, 
-        collection_name=_COLLECTION
-    )
+    try:
+        client, aclient = _get_qdrant_clients()
+        vector_store = QdrantVectorStore(
+            client=client, 
+            aclient=aclient, 
+            collection_name=_COLLECTION
+        )
+    except Exception as e:
+        print(f"[ERROR] 建立 Qdrant 連線失敗: {e}")
+        raise
 
-    collection_exists = client.collection_exists(collection_name=_COLLECTION)
-    collection_size = client.count(collection_name=_COLLECTION, exact=True).count if collection_exists else 0
+    try:
+        collection_exists = client.collection_exists(collection_name=_COLLECTION)
+        collection_size = client.count(collection_name=_COLLECTION, exact=True).count if collection_exists else 0
+        print(f"[INFO] Collection exists: {collection_exists}, size: {collection_size}")
+    except Exception as e:
+        print(f"[ERROR] 檢查 collection 狀態失敗: {e}")
+        raise
 
     if collection_size == 0:
-        documents = SimpleDirectoryReader(
-            input_dir=str(DATA_DIR),
-            recursive=True,
-            required_exts=[".txt", ".pdf", ".docx"],
-            file_metadata=_build_file_metadata,
-        ).load_data()
-        storage_context = StorageContext.from_defaults(vector_store=vector_store)
-        return VectorStoreIndex.from_documents(
-            documents,
-            storage_context=storage_context,
-            show_progress=True,
-        )
+        try:
+            documents = SimpleDirectoryReader(
+                input_dir=str(DATA_DIR),
+                recursive=True,
+                required_exts=[".txt", ".pdf", ".docx"],
+                file_metadata=_build_file_metadata,
+            ).load_data()
+            print(f"[INFO] 載入 {len(documents)} 個文件")
+        except Exception as e:
+            print(f"[ERROR] 載入文件失敗: {e}")
+            raise
 
-    return VectorStoreIndex.from_vector_store(vector_store)
+        try:
+            storage_context = StorageContext.from_defaults(vector_store=vector_store)
+            index = VectorStoreIndex.from_documents(
+                documents,
+                storage_context=storage_context,
+                show_progress=True,
+            )
+            
+            try:
+                print("[INFO] 正在為 Metadata 建立 Payload Index...")
+                client.create_payload_index(
+                    collection_name=_COLLECTION,
+                    field_name=_TOPIC_FIELD,
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
+                client.create_payload_index(
+                    collection_name=_COLLECTION,
+                    field_name=_CATEGORY_FIELD,
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
+                print("[INFO] Payload Index 建立完成！")
+            except Exception as e:
+                print(f"[WARNING] 建立 Payload Index 時發生狀況: {e}")
+
+            return index
+            
+        except Exception as e:
+            print(f"[ERROR] 建立向量索引失敗: {e}")
+            raise
+
+    try:
+        return VectorStoreIndex.from_vector_store(vector_store)
+    except Exception as e:
+        print(f"[ERROR] 從向量存儲加載索引失敗: {e}")
+        raise
 
 
 def _build_filters(topic: str, categories: list[str] | None = None) -> MetadataFilters:
@@ -238,59 +285,65 @@ def _build_search_isrc_knowledge_tool(
 
     async def search_isrc_knowledge(query: str, categories: list[str] = None):
         """查詢原資中心知識庫，必要時可用 categories 陣列限縮一個或多個檢索範圍。"""
-        if topic == _TOPIC_ISSUES:
+        try:
+            if topic == _TOPIC_ISSUES:
+                if status_callback:
+                    status_callback("正在搜尋原民議題相關資訊中...")
+                response = await base_query_engine.aquery(query)
+                if getattr(response, "source_nodes", None) and status_callback:
+                    status_callback("成功找到相關資料！正在整理回覆...")
+
+                return response
+
+            if not categories:
+                categories = []
+
+            valid_categories = [c for c in categories if c in _CATEGORY_SET]
+
+            if not valid_categories:
+                print(f"校園資源全域搜尋，無指定類別或類別不匹配，categories = {categories}")
+                if status_callback:
+                    status_callback("正在搜尋校園資源相關資訊中...")
+
+                response = await base_query_engine.aquery(query)
+                if getattr(response, "source_nodes", None) and status_callback:
+                    status_callback("成功找到相關資料！正在整理回覆...")
+
+                return response
+
+            filtered_query_engine = index.as_query_engine(
+                similarity_top_k=_TOP_K,
+                node_postprocessors=[reranker],
+                filters=_build_filters(topic, valid_categories),
+            )
+
             if status_callback:
-                status_callback("正在搜尋原民議題相關資訊中...")
-            response = await base_query_engine.aquery(query)
-            if getattr(response, "source_nodes", None) and status_callback:
-                status_callback("成功找到相關資料！正在整理回覆...")
+                status_callback(f"正在搜尋相關資訊類別：{', '.join(valid_categories)}...")
 
-            return response
+            response = await filtered_query_engine.aquery(query)
 
-        if not categories:
-            categories = []
+            if getattr(response, "source_nodes", None):
+                msg = f"僅搜尋: {valid_categories} 類別，成功找到相關資訊"
+                print(msg)
+                if status_callback:
+                    status_callback("成功找到相關資料！正在整理回覆...")
+                return response
 
-        valid_categories = [c for c in categories if c in _CATEGORY_SET]
-
-        if not valid_categories:
-            print(f"校園資源全域搜尋，無指定類別或類別不匹配，categories = {categories}")
-            if status_callback:
-                status_callback("正在搜尋校園資源相關資訊中...")
-
-            response = await base_query_engine.aquery(query)
-            if getattr(response, "source_nodes", None) and status_callback:
-                status_callback("成功找到相關資料！正在整理回覆...")
-
-            return response
-
-        filtered_query_engine = index.as_query_engine(
-            similarity_top_k=_TOP_K,
-            node_postprocessors=[reranker],
-            filters=_build_filters(topic, valid_categories),
-        )
-
-        if status_callback:
-            status_callback(f"正在搜尋相關資訊類別：{', '.join(valid_categories)}...")
-
-        response = await filtered_query_engine.aquery(query)
-
-        if getattr(response, "source_nodes", None):
-            msg = f"僅搜尋: {valid_categories} 類別，成功找到相關資訊"
+            msg = f"僅搜尋: {valid_categories} 類別，但沒有找到任何資訊，退回校園資源全域搜尋"
             print(msg)
             if status_callback:
-                status_callback("成功找到相關資料！正在整理回覆...")
-            return response
+                status_callback("在指定類別未找到足夠資訊，進行重新搜尋...")
 
-        msg = f"僅搜尋: {valid_categories} 類別，但沒有找到任何資訊，退回校園資源全域搜尋"
-        print(msg)
-        if status_callback:
-            status_callback("在指定類別未找到足夠資訊，進行重新搜尋...")
+            fallback_response = await base_query_engine.aquery(query)
+            if getattr(fallback_response, "source_nodes", None) and status_callback:
+                status_callback("已成功找到相關資料！重新整理回覆中...")
 
-        fallback_response = await base_query_engine.aquery(query)
-        if getattr(fallback_response, "source_nodes", None) and status_callback:
-            status_callback("已成功找到相關資料！重新整理回覆中...")
-
-        return fallback_response
+            return fallback_response
+        except Exception as e:
+            print(f"[ERROR] 檢索知識庫失敗: {e}")
+            if status_callback:
+                status_callback("檢索過程發生錯誤，請稍後再試...")
+            raise
 
     if topic == _TOPIC_ISSUES:
         tool_desc = (
@@ -367,18 +420,25 @@ class MultiTurnRAGService:
         meta: dict[str, list] = {"source_nodes": []}
 
         async def _stream():
-            handler = self.workflow.run(user_msg=question, ctx=self.ctx)
-            
-            async for event in handler.stream_events():
-                if isinstance(event, AgentStream):
-                    yield event.delta
-                elif isinstance(event, ToolCallResult):
-                    raw = getattr(event.tool_output, "raw_output", None)
-                    nodes = getattr(raw, "source_nodes", []) if raw else []
-                    if nodes:
-                        meta["source_nodes"].extend(nodes)
+            try:
+                print(f"[INFO] 開始執行 workflow，問題: {question}")
+                handler = self.workflow.run(user_msg=question, ctx=self.ctx)
 
-            self.ctx = handler.ctx
+                async for event in handler.stream_events():
+                    if isinstance(event, AgentStream):
+                        yield event.delta
+                    elif isinstance(event, ToolCallResult):
+                        raw = getattr(event.tool_output, "raw_output", None)
+                        nodes = getattr(raw, "source_nodes", []) if raw else []
+                        if nodes:
+                            meta["source_nodes"].extend(nodes)
+                            print(f"[INFO] 找到 {len(nodes)} 個參考來源")
+
+                self.ctx = handler.ctx
+                print(f"[INFO] workflow 執行完成")
+            except Exception as e:
+                print(f"[ERROR] stream_chat 執行失敗: {e}")
+                raise
 
         return _stream(), meta
 
