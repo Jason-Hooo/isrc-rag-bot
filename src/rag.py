@@ -22,6 +22,7 @@ from llama_index.postprocessor.jinaai_rerank import JinaRerank
 from llama_index.llms.google_genai import GoogleGenAI
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient, AsyncQdrantClient
+from qdrant_client.models import PayloadSchemaType
 
 load_dotenv()
 
@@ -226,11 +227,30 @@ def _build_index() -> VectorStoreIndex:
 
         try:
             storage_context = StorageContext.from_defaults(vector_store=vector_store)
-            return VectorStoreIndex.from_documents(
+            index = VectorStoreIndex.from_documents(
                 documents,
                 storage_context=storage_context,
                 show_progress=True,
             )
+            
+            try:
+                print("[INFO] 正在為 Metadata 建立 Payload Index...")
+                client.create_payload_index(
+                    collection_name=_COLLECTION,
+                    field_name=_TOPIC_FIELD,
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
+                client.create_payload_index(
+                    collection_name=_COLLECTION,
+                    field_name=_CATEGORY_FIELD,
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
+                print("[INFO] Payload Index 建立完成！")
+            except Exception as e:
+                print(f"[WARNING] 建立 Payload Index 時發生狀況: {e}")
+
+            return index
+            
         except Exception as e:
             print(f"[ERROR] 建立向量索引失敗: {e}")
             raise
