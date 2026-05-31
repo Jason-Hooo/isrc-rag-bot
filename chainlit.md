@@ -1,27 +1,23 @@
-# 政大原資中心 AI 智慧服務 �
+# 原寶 (isrc-rag-bot) - 政大原資中心 AI 智慧服務機器人
 
-歡迎使用政大原資中心的 AI 智慧服務機器人「原寶」！
+這是專為**國立政治大學原住民族學生資源中心 (ISRC)** 打造的 AI 問答機器人「原寶」，透過親切的語氣協助同學與教職員查詢校園原住民相關資源、獎助學金、學雜費減免、住宿權益以及文化活動等資訊。
 
-## 專案資訊
+## 如何使用 🎯
 
-這是一個基於 RAG (Retrieval-Augmented Generation) 技術的 AI 聊天機器人，專為政大原資中心設計，提供校園資源查詢和原民議題討論服務。
+開始對話時，請先選擇您想查詢的主題，系統會根據您的問題自動判別類別並搜尋相關資訊，最後提供精準答案：
 
-## 專案連結 🔗
+### 校園資源
+查詢政大原資中心的實質資訊：
+- **文化活動與社群連結**：文化活動、社團與社群等
+- **原住民族學生升學管道**：升學保障、公費留學辦法等
+- **獎助學金與行政庶務**：獎助學金、學雜費減免、住宿權益、原資中心基本資訊等
+- **學習與校園生活支持**：心理支持與輔導、身分別變更、希望種子培育計畫、急難救助、課業及學習輔導等
+- **職涯與發展**：公職考試資訊、政大公職講座、暑期工讀等
 
-- **GitHub Repository:** [Jason-Hooo/isrc-rag-bot](https://github.com/Jason-Hooo/isrc-rag-bot)
-- **Documentation:** [Chainlit Documentation](https://docs.chainlit.io) 📚
+### 原民議題
+探討原住民族相關社會議題與小故事，一起深入了解原住民文化與議題。
 
-## 功能特色
+## 相關連結 🔗
 
-- 💰 **獎助學金查詢**：原民會、各縣市政府獎助學金申請資訊
-- 🏠 **住宿權益**：校內住宿保障與申請辦法
-- 🎉 **文化活動**：原資中心舉辦的聯誼與文化活動
-- 💬 **原民議題**：一起探討與了解原住民相關議題
-
-## 技術架構
-
-- **Frontend:** Chainlit
-- **Backend:** Python with LangChain
-- **Vector Database:** Qdrant
-- **LLM:** Google Gemini
-- **Data Logging:** Google Sheets
+- **GitHub Repository**: [https://github.com/Jason-Hooo/isrc-rag-bot](https://github.com/Jason-Hooo/isrc-rag-bot) 📚
+- **Live Demo**: [https://jasonhoooooo-isrc-rag-bot.hf.space](https://jasonhoooooo-isrc-rag-bot.hf.space) 🚀
