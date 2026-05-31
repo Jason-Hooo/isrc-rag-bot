@@ -288,10 +288,10 @@ def _build_search_isrc_knowledge_tool(
         try:
             if topic == _TOPIC_ISSUES:
                 if status_callback:
-                    status_callback("正在搜尋原民議題相關資訊中...")
+                    await status_callback("正在搜尋原民議題相關資訊中...")
                 response = await base_query_engine.aquery(query)
                 if getattr(response, "source_nodes", None) and status_callback:
-                    status_callback("成功找到相關資料！正在整理回覆...")
+                    await status_callback("成功找到相關資料！正在整理回覆...")
 
                 return response
 
@@ -303,11 +303,11 @@ def _build_search_isrc_knowledge_tool(
             if not valid_categories:
                 print(f"校園資源全域搜尋，無指定類別或類別不匹配，categories = {categories}")
                 if status_callback:
-                    status_callback("正在搜尋校園資源相關資訊中...")
+                    await status_callback("正在搜尋校園資源相關資訊中...")
 
                 response = await base_query_engine.aquery(query)
                 if getattr(response, "source_nodes", None) and status_callback:
-                    status_callback("成功找到相關資料！正在整理回覆...")
+                    await status_callback("成功找到相關資料！正在整理回覆...")
 
                 return response
 
@@ -318,7 +318,7 @@ def _build_search_isrc_knowledge_tool(
             )
 
             if status_callback:
-                status_callback(f"正在搜尋相關資訊類別：{', '.join(valid_categories)}...")
+                await status_callback(f"正在搜尋相關資訊類別：{', '.join(valid_categories)}...")
 
             response = await filtered_query_engine.aquery(query)
 
@@ -326,23 +326,23 @@ def _build_search_isrc_knowledge_tool(
                 msg = f"僅搜尋: {valid_categories} 類別，成功找到相關資訊"
                 print(msg)
                 if status_callback:
-                    status_callback("成功找到相關資料！正在整理回覆...")
+                    await status_callback("成功找到相關資料！正在整理回覆...")
                 return response
 
             msg = f"僅搜尋: {valid_categories} 類別，但沒有找到任何資訊，退回校園資源全域搜尋"
             print(msg)
             if status_callback:
-                status_callback("在指定類別未找到足夠資訊，進行重新搜尋...")
+                await status_callback("在指定類別未找到足夠資訊，進行重新搜尋...")
 
             fallback_response = await base_query_engine.aquery(query)
             if getattr(fallback_response, "source_nodes", None) and status_callback:
-                status_callback("已成功找到相關資料！重新整理回覆中...")
+                await status_callback("已成功找到相關資料！重新整理回覆中...")
 
             return fallback_response
         except Exception as e:
             print(f"[ERROR] 檢索知識庫失敗: {e}")
             if status_callback:
-                status_callback("檢索過程發生錯誤，請稍後再試...")
+                await status_callback("檢索過程發生錯誤，請稍後再試...")
             raise
 
     if topic == _TOPIC_ISSUES:
@@ -384,9 +384,9 @@ class MultiTurnRAGService:
             top_n=_RERANK_TOP_N,
         )
 
-        def _tool_callback(msg: str):
+        async def _tool_callback(msg: str):
             if self.status_callback:
-                self.status_callback(msg)
+                await self.status_callback(msg)
 
         vector_tool = _build_search_isrc_knowledge_tool(
             index=self._index,
