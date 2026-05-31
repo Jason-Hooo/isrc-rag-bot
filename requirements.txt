@@ -13,3 +13,4 @@ python-docx
 gspread
 google-auth-oauthlib
 docx2txt
+chainlit

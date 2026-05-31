@@ -68,10 +68,10 @@ _PERSONA_BASE_SYSTEM_PROMPT = (
 
 _ROUTING_ISSUES_SYSTEM_PROMPT = (
     "2. 判斷是否調用 `isrc_knowledge_base` 工具：\n"
-    "   - 除了單純的寒暄問候外，只要夥伴詢問任何關於【原住民族社會議題】等內容，你都【必須先呼叫 `isrc_knowledge_base` 工具】檢索資料。\n"
+    "   - 除了單純的寒暄問候外，只要夥伴詢問任何關於【原住民族社會議題或者是小故事】等內容，你都【必須先呼叫 `isrc_knowledge_base` 工具】檢索資料。\n"
     "   - 💡【重要限制】呼叫工具時，此專區『不需要』判斷任何類別，請直接保持 `categories` 參數為空（None 或空陣列），讓系統直接進行主題全域搜尋。\n"
     "   - 若為單純的日常寒暄，或是明確在工具中找不到答案，請直接以最親近、自然的語氣給予陪伴或答覆，絕對不可亂編。\n"
-    "3. 組織輸出：回答時，請「先從問題的答案開始講起」，讓夥伴可以第一時間抓住重點，並確保最後的語氣完整且溫暖。"
+    "3. 組織輸出：回答時，盡量讓夥伴可以第一時間抓住重點，並確保最後的語氣完整且溫暖。"
 )
 
 _ROUTING_RESOURCES_SYSTEM_PROMPT = (
@@ -288,10 +288,10 @@ def _build_search_isrc_knowledge_tool(
         try:
             if topic == _TOPIC_ISSUES:
                 if status_callback:
-                    status_callback("正在搜尋原民議題相關資訊中...")
+                    await status_callback("正在搜尋原民議題相關資訊中...")
                 response = await base_query_engine.aquery(query)
                 if getattr(response, "source_nodes", None) and status_callback:
-                    status_callback("成功找到相關資料！正在整理回覆...")
+                    await status_callback("成功找到相關資料！正在整理回覆...")
 
                 return response
 
@@ -303,11 +303,11 @@ def _build_search_isrc_knowledge_tool(
             if not valid_categories:
                 print(f"校園資源全域搜尋，無指定類別或類別不匹配，categories = {categories}")
                 if status_callback:
-                    status_callback("正在搜尋校園資源相關資訊中...")
+                    await status_callback("正在搜尋校園資源相關資訊中...")
 
                 response = await base_query_engine.aquery(query)
                 if getattr(response, "source_nodes", None) and status_callback:
-                    status_callback("成功找到相關資料！正在整理回覆...")
+                    await status_callback("成功找到相關資料！正在整理回覆...")
 
                 return response
 
@@ -318,7 +318,7 @@ def _build_search_isrc_knowledge_tool(
             )
 
             if status_callback:
-                status_callback(f"正在搜尋相關資訊類別：{', '.join(valid_categories)}...")
+                await status_callback(f"正在搜尋相關資訊類別：{', '.join(valid_categories)}...")
 
             response = await filtered_query_engine.aquery(query)
 
@@ -326,29 +326,29 @@ def _build_search_isrc_knowledge_tool(
                 msg = f"僅搜尋: {valid_categories} 類別，成功找到相關資訊"
                 print(msg)
                 if status_callback:
-                    status_callback("成功找到相關資料！正在整理回覆...")
+                    await status_callback("成功找到相關資料！正在整理回覆...")
                 return response
 
             msg = f"僅搜尋: {valid_categories} 類別，但沒有找到任何資訊，退回校園資源全域搜尋"
             print(msg)
             if status_callback:
-                status_callback("在指定類別未找到足夠資訊，進行重新搜尋...")
+                await status_callback("在指定類別未找到足夠資訊，進行重新搜尋...")
 
             fallback_response = await base_query_engine.aquery(query)
             if getattr(fallback_response, "source_nodes", None) and status_callback:
-                status_callback("已成功找到相關資料！重新整理回覆中...")
+                await status_callback("已成功找到相關資料！重新整理回覆中...")
 
             return fallback_response
         except Exception as e:
             print(f"[ERROR] 檢索知識庫失敗: {e}")
             if status_callback:
-                status_callback("檢索過程發生錯誤，請稍後再試...")
+                await status_callback("檢索過程發生錯誤，請稍後再試...")
             raise
 
     if topic == _TOPIC_ISSUES:
         tool_desc = (
             "原資中心專屬知識庫：【原民議題】。\n"
-            "除了單純的寒暄問候外，當使用者詢問任何關於原住民族社會議題等內容時，必須優先使用此工具檢索。\n"
+            "除了單純的寒暄問候外，當使用者詢問任何關於原住民族社會議題或是小故事等內容時，必須優先使用此工具檢索。\n"
             "此專區不需要傳入 categories 參數，請保持空白。"
         )
     else:
@@ -384,9 +384,9 @@ class MultiTurnRAGService:
             top_n=_RERANK_TOP_N,
         )
 
-        def _tool_callback(msg: str):
+        async def _tool_callback(msg: str):
             if self.status_callback:
-                self.status_callback(msg)
+                await self.status_callback(msg)
 
         vector_tool = _build_search_isrc_knowledge_tool(
             index=self._index,
