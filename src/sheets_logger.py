@@ -27,7 +27,7 @@ def _get_gspread_client() -> gspread.Client | None:
 
     try:
         creds = Credentials.from_service_account_file(
-            _GOOGLE_APPLICATION_CREDENTIALS, 
+            _GOOGLE_APPLICATION_CREDENTIALS,
             scopes=_SCOPES
         )
         client = gspread.authorize(creds)
