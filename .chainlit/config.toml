@@ -153,7 +153,7 @@ alert_style = "classic"
 custom_meta_image_url = "https://raw.githubusercontent.com/Jason-Hooo/isrc-rag-bot/main/public/avatars/assistant.png"
 
 # Load assistant logo directly from URL.
-# logo_file_url = "/public/avatars/assistant.png"
+logo_file_url = "/public/favicon.png"
 
 # Load assistant avatar image directly from URL.
 default_avatar_file_url = "/public/avatars/assistant.png"
