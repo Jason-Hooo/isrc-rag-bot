@@ -20,4 +20,3 @@
 ## 相關連結 🔗
 
 - **GitHub Repository**: [https://github.com/Jason-Hooo/isrc-rag-bot](https://github.com/Jason-Hooo/isrc-rag-bot) 📚
-- **Live Demo**: [https://jasonhoooooo-isrc-rag-bot.hf.space](https://jasonhoooooo-isrc-rag-bot.hf.space) 🚀

@@ -1,7 +1,5 @@
 """chainlit app for ISRC RAG bot"""
 
-import os
-import tempfile
 import asyncio
 from uuid import uuid4
 import textwrap
@@ -9,12 +7,6 @@ import chainlit as cl
 from dotenv import load_dotenv
 
 load_dotenv()
-
-google_creds = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-if google_creds and google_creds.strip().startswith("{"):
-    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as temp_file:
-        temp_file.write(google_creds)
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = temp_file.name
 
 from src.rag import MultiTurnRAGService
 from src.sheets_logger import log_to_sheet  

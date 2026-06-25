@@ -29,7 +29,7 @@ An AI-powered conversational assistant "原寶" (Yuan Bao) built with Retrieval-
 - **Streaming Responses**: Real-time token streaming with loading animations
 - **Conversation Logging**: Automatic logging to Google Sheets for analytics and improvement
 
-## System Architecture
+## Tech Stack
 
 - **RAG Framework**: LlamaIndex (AgentWorkflow for multi-turn conversations and tool calling)
 - **Language Model (LLM)**: Google Gemini 2.5 Flash (`gemini-2.5-flash`)
@@ -56,6 +56,8 @@ isrc-rag-bot/
 │   └── 原民議題/
 ├── images/                # Demo GIFs
 │   └── isrc-rag-bot-demo.gif
+├── keys/                  # Google Cloud Service Account JSON key (create manually)
+│   └── google-credentials.json
 ├── public/                # Static resources
 │   └── avatars/
 │       └── assistant.png
@@ -72,6 +74,44 @@ isrc-rag-bot/
 ├── README.md              # This file
 └── requirements.txt       # Python dependencies
 ```
+
+## Configuration
+
+Create a `.env` file in the project root directory with the following environment variables:
+
+```env
+# Google Cloud Service Account JSON key file path
+# Download the JSON key file from Google Cloud Console and place it in keys/
+GOOGLE_APPLICATION_CREDENTIALS=./keys/google-credentials.json
+
+# GCP Project ID
+GOOGLE_CLOUD_PROJECT=your-project-id
+
+# Google Cloud region for running Gemini models
+GOOGLE_CLOUD_LOCATION=us-central1
+
+# Google Sheet name for conversation logging
+GOOGLE_SHEET_NAME=原資智慧服務 AI 機器人回覆蒐集表
+
+# JinaAI API Key (for Embedding and Reranker)
+JINAAI_API_KEY=your-jinaai-api-key
+
+# Qdrant Cloud connection settings
+QDRANT_URL=https://your-cluster.qdrant.io
+QDRANT_API_KEY=your-qdrant-api-key
+```
+
+**Important**: Create a `keys/` directory in the project root and place your Google Cloud Service Account JSON key file there as `google-credentials.json`.
+
+## Data Setup
+
+Place any ISRC-related documents in the `data/` directory. Supported formats: `.pdf`, `.docx`, `.txt`.
+
+**Important**: All `.txt` files must be saved in **UTF-8** encoding to avoid character encoding issues with LlamaIndex during embedding generation.
+
+The system automatically generates metadata based on file structure:
+- First-level directory determines `topic` metadata (Campus Resources (校園資源) or Indigenous Issues (原民議題))
+- Second-level directory (for Campus Resources (校園資源) only) determines `category` metadata (one of 5 categories)
 
 ## Installation
 
@@ -92,47 +132,31 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Configuration
-
-Create a `.env` file in the project root directory with the following environment variables:
-
-```env
-# Google Cloud Service Account JSON key
-GOOGLE_APPLICATION_CREDENTIALS='{"type": "service_account", ...}'
-
-# GCP Project ID
-GOOGLE_CLOUD_PROJECT=your-project-id
-
-# Google Cloud region for running Gemini models
-GOOGLE_CLOUD_LOCATION=us-central1
-
-# Google Sheet name for conversation logging
-GOOGLE_SHEET_NAME=原資智慧服務 AI 機器人回覆蒐集表
-
-# JinaAI API Key (for Embedding and Reranker)
-JINAAI_API_KEY=your-jinaai-api-key
-
-# Qdrant Cloud connection settings
-QDRANT_URL=https://your-cluster.qdrant.io
-QDRANT_API_KEY=your-qdrant-api-key
-```
-
-## Data Setup
-
-Place any ISRC-related documents in the `data/` directory. Supported formats: `.pdf`, `.docx`, `.txt`.
-
-**Important**: All `.txt` files must be saved in **UTF-8** encoding to avoid character encoding issues with LlamaIndex during embedding generation.
-
-The system automatically generates metadata based on file structure:
-- First-level directory determines `topic` metadata (Campus Resources (校園資源) or Indigenous Issues (原民議題))
-- Second-level directory (for Campus Resources (校園資源) only) determines `category` metadata (one of 5 categories)
-
 ## Usage
 
 Start the Chainlit server:
 
 ```bash
 chainlit run app.py -w
+```
+
+The web interface will be available at `http://localhost:8000`.
+
+## Docker Deployment
+
+### Build the Docker image:
+
+```bash
+docker build -t isrc-rag-bot:v1 .
+```
+
+### Run the Docker container:
+
+```bash
+docker run -d -p 8000:8000 \
+  --env-file .env \
+  -v "$(pwd)/keys/google-credentials.json:/app/keys/google-credentials.json" \
+  --name yuan-bao isrc-rag-bot:v1
 ```
 
 The web interface will be available at `http://localhost:8000`.
