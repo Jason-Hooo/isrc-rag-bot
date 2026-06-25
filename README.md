@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-HuggingFace-FFD21E)](https://jasonhoooooo-isrc-rag-bot.hf.space)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-GCP%20Cloud%20Run-4285F4)](https://isrc-rag-bot-185426584977.asia-east1.run.app)
 [![Snyk Badge](https://snyk.io/test/github/Jason-Hooo/isrc-rag-bot/badge.svg?targetFile=requirements.txt)](https://snyk.io/worg/jason-hooo/project/288e622b-4878-4657-906e-573a9501eb0d)
 [![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 
@@ -10,9 +10,9 @@ An AI-powered conversational assistant "原寶" (Yuan Bao) built with Retrieval-
 
 ## Demo
 
-![ISRC RAG Bot Demo](images/isrc-rag-bot-demo.gif)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-GCP%20Cloud%20Run-4285F4)](https://isrc-rag-bot-185426584977.asia-east1.run.app)
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-HuggingFace-FFD21E)](https://jasonhoooooo-isrc-rag-bot.hf.space)
+![ISRC RAG Bot Demo](images/isrc-rag-bot-demo.gif)
 
 ## Features
 
@@ -59,17 +59,20 @@ isrc-rag-bot/
 ├── keys/                  # Google Cloud Service Account JSON key (create manually)
 │   └── google-credentials.json
 ├── public/                # Static resources
-│   └── avatars/
-│       └── assistant.png
+│   ├── avatars/
+│   │   └── assistant.png
+│   ├── favicon.png
+│   └── theme.json
 ├── src/
-│   ├── evaluate_rag.py
 │   ├── rag.py             # RAG core engine (indexing, retrieval, agent workflow)
 │   └── sheets_logger.py   # Google Sheets logging module
+├── .dockerignore          # Docker ignore file
 ├── .env                   # Environment variables (create manually)
 ├── .env.example           # Environment variables template
 ├── .gitignore
 ├── app.py                 # Chainlit application frontend
 ├── chainlit.md            # Chainlit welcome page settings
+├── Dockerfile             # Docker configuration
 ├── LICENSE                # MIT License
 ├── README.md              # This file
 └── requirements.txt       # Python dependencies
