@@ -2,7 +2,7 @@
 
 import datetime
 import os
-
+import google.auth
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -26,10 +26,14 @@ def _get_gspread_client() -> gspread.Client | None:
         return None
 
     try:
-        creds = Credentials.from_service_account_file(
-            _GOOGLE_APPLICATION_CREDENTIALS,
-            scopes=_SCOPES
-        )
+        if _GOOGLE_APPLICATION_CREDENTIALS and os.path.exists(_GOOGLE_APPLICATION_CREDENTIALS):
+            creds = Credentials.from_service_account_file(
+                _GOOGLE_APPLICATION_CREDENTIALS,
+                scopes=_SCOPES
+            )
+        else:
+            creds, _ = google.auth.default(scopes=_SCOPES)
+
         client = gspread.authorize(creds)
         return client
     except Exception as e:
